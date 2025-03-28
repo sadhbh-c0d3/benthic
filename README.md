@@ -6,7 +6,7 @@ Crypto Exchange in Rust
 
 ## Example Test Output
 
-Benthic just kicjed-off, and we implemented order manager and order book with execution policy, which allows us to
+Benthic just kicked-off, and we implemented order manager and order book with execution policy, which allows us to
 place and execute orders on the book. We support IOC, Limit and Market. Idea is to support Stop and OCO.
 The execution policy needs work, will need to check available balance/margin of the participants when
 placing/execution orders. Order manager needs to support Cancel order. Additionally execution policy should
