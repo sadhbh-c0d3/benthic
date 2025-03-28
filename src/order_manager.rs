@@ -58,6 +58,10 @@ impl<T> LogExecutions<T> where T: ExecutionPolicy {
     pub fn new(policy: T) -> Self {
         Self { policy }
     }
+
+    pub fn inner(&self) -> &T {
+        &self.policy
+    }
 }
 
 impl<T> ExecutionPolicy for LogExecutions<T> where T: ExecutionPolicy {
@@ -150,8 +154,8 @@ fn test_order_book() {
 
     let mut order_manager = OrderManager::new(order_books);
     let mut margin_manager = MarginManager::new();
-    margin_manager.add_participant(1001);
-    margin_manager.add_participant(1002);
+    margin_manager.add_participant(1001).borrow_mut().add_margin_data(&asset_btc).add_margin_data(&asset_eth).add_margin_data(&asset_usdt);
+    margin_manager.add_participant(1002).borrow_mut().add_margin_data(&asset_btc).add_margin_data(&asset_eth).add_margin_data(&asset_usdt);
     //let execution_policy = LogExecutions::new(ExecuteAllways{});
     let execution_policy = LogExecutions::new(margin_manager);
     
@@ -192,6 +196,22 @@ fn test_order_book() {
         if let Err(err) = order_manager.place_order(order.clone(), &execution_policy) {
             println!("Error {}", err);
         }
+    }
+
+    println!("");
+    for (participant_id, margin) in execution_policy.inner().get_participants() {
+
+        println!("Portfolio of {}", participant_id);
+        println!("-------------------------------------");
+        
+        for (symbol, asset_data) in &margin.borrow().portfolio {
+            let asset_data = asset_data.borrow();
+            println!("\t{: >5} {: >10} | {: >10}", symbol,
+                price_fmt(asset_data.deliver.quantity_committed, asset_data.asset.decimals),
+                price_fmt(asset_data.receive.quantity_committed, asset_data.asset.decimals));
+        }
+    
+        println!("");
     }
 
 }

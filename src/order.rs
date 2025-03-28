@@ -97,7 +97,7 @@ pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decim
     //   (b_base * b_quote) / k_base
     // = a * k_quote + b + c / k_base + d / k_base
     //
-    a * k_quote + b + (c + d) / k_base
+    a * k_quote + b + (c * k_quote + d) / k_base
 }
 
 pub fn quote_price_fmt(price: u64, market: &Market) -> String {
@@ -142,4 +142,19 @@ fn test_calculate_value() {
         price_fmt(value, 2),
         value);
     assert_eq!(value, 3000);
+}
+
+#[test]
+fn test_calculate_value_2() {
+    let quantity = 50000;
+    let price = 125000;
+    let base_decimals = 5;
+    let quote_decimals = 4;
+    let value = calculate_value(quantity, price, base_decimals, quote_decimals);
+    println!("Calculated {} x {} = {} ({})", 
+        price_fmt(quantity, base_decimals), 
+        price_fmt(price, quote_decimals), 
+        price_fmt(value, quote_decimals),
+        value);
+    assert_eq!(value, 62500);
 }

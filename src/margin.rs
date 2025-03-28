@@ -2,11 +2,13 @@ use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
 use crate::{execution_policy::ExecutionPolicy, order::*, order_book::OrderQuantity};
 
+#[derive(Default)]
 pub struct MarginLot {
     pub quantity_orig: u64,
     pub quantity_left: u64,
 }
 
+#[derive(Default)]
 pub struct MarginSide {
     pub quantity_open: u64,
     pub quantity_locked: u64,
@@ -20,6 +22,16 @@ pub struct MarginAsset {
     pub deliver: MarginSide
 }
 
+impl MarginAsset {
+    pub fn new(asset: &Rc<Asset>) -> Self {
+        Self {
+            asset: asset.clone(),
+            receive: Default::default(),
+            deliver: Default::default()
+        }
+    }
+}
+
 pub struct Margin {
     pub participant_id: usize,
     pub portfolio: HashMap<String, Rc<RefCell<MarginAsset>>>
@@ -31,6 +43,11 @@ impl Margin {
             participant_id,
             portfolio: HashMap::new()
         }
+    }
+
+    pub fn add_margin_data(&mut self, asset: &Rc<Asset>) -> &mut Self {
+        self.portfolio.entry(asset.symbol.clone()).or_insert(Rc::new(RefCell::new(MarginAsset::new(asset))));
+        self
     }
 
     fn get_margin_data_mut(&self, asset: &String) -> Option<&Rc<RefCell<MarginAsset>>> {
@@ -90,6 +107,8 @@ impl Margin {
                     let mut base_margin_data_mut = base_margin_data.borrow_mut();
                     let mut quote_margin_data_mut = quote_margin_data.borrow_mut();
 
+                    // TODO: This is only half correct as we use decimals from market, but then
+                    // before we store it into portfolio, we should convert into asset specific decimals
                     let order_value = calculate_value(
                             *executed_quantity,
                             limit.price, 
@@ -144,6 +163,8 @@ impl Margin {
                     let mut base_margin_data_mut = base_margin_data.borrow_mut();
                     let mut quote_margin_data_mut = quote_margin_data.borrow_mut();
 
+                    // TODO: This is only half correct as we use decimals from market, but then
+                    // before we store it into portfolio, we should convert into asset specific decimals
                     let order_value = calculate_value(
                             executed_quantity,
                             limit.price, 
@@ -197,8 +218,12 @@ impl MarginManager {
         }
     }
 
-    pub fn add_participant(&mut self, participant_id: usize) {
-        self.margins.entry(participant_id).or_insert(Rc::new(RefCell::new(Margin::new(participant_id))));
+    pub fn add_participant(&mut self, participant_id: usize) -> &Rc<RefCell<Margin>> {
+        self.margins.entry(participant_id).or_insert(Rc::new(RefCell::new(Margin::new(participant_id))))
+    }
+
+    pub fn get_participants(&self) -> &HashMap<usize, Rc<RefCell<Margin>>> {
+        &self.margins
     }
 }
 
