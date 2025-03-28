@@ -89,7 +89,7 @@ impl PriceLevels {
             Side::Bid => {
                 let mut cursor = self.levels.front_mut();
                 while let Some(level) = cursor.get() {
-                    if order_quantity.quantity > 0 {
+                    if order_quantity.quantity == 0 {
                         break;
                     }
                     level.match_order(order_quantity, execution_policy);
@@ -102,7 +102,7 @@ impl PriceLevels {
             Side::Ask => {
                 let mut cursor = self.levels.back_mut();
                 while let Some(level) = cursor.get() {
-                    if order_quantity.quantity > 0 {
+                    if order_quantity.quantity == 0 {
                         break;
                     }
                     level.match_order(order_quantity, execution_policy);
@@ -121,7 +121,7 @@ impl PriceLevels {
             Side::Bid => {
                 let mut cursor = self.levels.front_mut();
                 while let Some(level) = cursor.get() {
-                    if level.price > limit.price && order_quantity.quantity > 0 {
+                    if level.price < limit.price && order_quantity.quantity == 0 {
                         break;
                     }
                     level.match_order(order_quantity, execution_policy);
@@ -134,7 +134,7 @@ impl PriceLevels {
             Side::Ask => {
                 let mut cursor = self.levels.back_mut();
                 while let Some(level) = cursor.get() {
-                    if level.price < limit.price && order_quantity.quantity > 0 {
+                    if level.price > limit.price && order_quantity.quantity == 0 {
                         break;
                     }
                     level.match_order(order_quantity, execution_policy);
