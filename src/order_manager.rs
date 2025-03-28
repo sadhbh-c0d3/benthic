@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
-use crate::{order::*, order_book::{ExecuteAllways, ExecutionPolicy, OrderBook}};
+use crate::{order::*, order_book::{OrderBook, OrderQuantity}, execution_policy::{ExecuteAllways, ExecutionPolicy}};
 
 pub trait OrderBookManager {
     fn get_order_book(&self, symbol: &String) -> Option<Rc<RefCell<OrderBook>>>;
@@ -61,7 +61,7 @@ impl<T> LogExecutions<T> where T: ExecutionPolicy {
 }
 
 impl<T> ExecutionPolicy for LogExecutions<T> where T: ExecutionPolicy {
-    fn place_order(&self, order_quantity: &crate::order_book::OrderQuantity) -> Result<(), Box<dyn Error>>{
+    fn place_order(&self, order_quantity: &OrderQuantity) -> Result<(), Box<dyn Error>>{
         if let Err(err) = self.policy.place_order(order_quantity) {
             println!("Cancel: {} on: {} Order({}:{}): {} - Reason: {}", 
                 base_quantity_fmt(order_quantity.quantity, &order_quantity.order.market),
@@ -82,7 +82,7 @@ impl<T> ExecutionPolicy for LogExecutions<T> where T: ExecutionPolicy {
             Ok(())
         }
     }
-    fn execute_orders(&self, executed_quantity: &mut u64, aggressor_order: &mut crate::order_book::OrderQuantity, book_order: &mut crate::order_book::OrderQuantity) -> Result<(), Box<dyn Error>> {
+    fn execute_orders(&self, executed_quantity: &mut u64, aggressor_order: &mut OrderQuantity, book_order: &mut OrderQuantity) -> Result<(), Box<dyn Error>> {
         if let Err(err) = self.policy.execute_orders(executed_quantity, aggressor_order, book_order) {
             // Execution failed/rejected - TODO: Possibly bool might not be enough, should use Result
             println!("Execution rejected");
