@@ -18,4 +18,17 @@ New: 1.0BTC on: BTC/ETH Order(1001:2): Limit sell 1.0BTC @ 12.5000ETH
 Execute: 0.50000BTC on: BTC/ETH Order(1002:3): Limit buy 0.50000BTC @ 12.5000ETH Aggressor
 Execute: 0.50000BTC on: BTC/ETH Order(1001:2): Limit sell 1.0BTC @ 12.5000ETH
 Cancel: 0.0BTC on: BTC/ETH Order(1002:3): Limit buy 0.50000BTC @ 12.5000ETH - Reason: Not enough quantity
+
+Portfolio of 1001
+-------------------------------------
+         USDT        0.0 |        0.0
+          ETH        0.0 |    0.62500
+          BTC    0.50000 |        0.0
+
+Portfolio of 1002
+-------------------------------------
+          ETH    0.62500 |        0.0
+         USDT        0.0 |        0.0
+          BTC        0.0 |    0.50000
+
 ```
