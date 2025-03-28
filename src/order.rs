@@ -67,6 +67,39 @@ pub fn price_fmt(price: u64, decimals: u8) -> String {
     format!("{}.{}", a, b)
 }
 
+pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decimals: u8) -> u64 {
+    let decimal_base: u64 = 10;
+
+    // base = a_base * k_base + b_base
+    let k_base = decimal_base.pow(base_decimals as u32);
+    let a_base = quantity / k_base;
+    let b_base = quantity % k_base;
+
+    // quote = a_quote * k_quote + b_quote
+    let k_quote = decimal_base.pow(quote_decimals as u32);
+    let a_quote = price / k_quote;
+    let b_quote = price % k_quote;
+
+    // base * quote = (a_base * k_base + b_base) * (a_quote * k_quote + b_quote)
+    // = (a_base * a_quote * k_base * k_quote) + 
+    //   (a_base * b_quote * k_base) + 
+    //   (a_quote * b_base * k_quote) +
+    //   (b_base * b_quote)
+    let a = a_base * a_quote; // * (k_base * k_quote)
+    let b = a_base * b_quote; // * (k_base)
+    let c = a_quote * b_base; // * (k_quote)
+    let d = b_base * b_quote; // * 1
+
+    // base * quote / k_base
+    // = (a_base * a_quote * k_quote) + 
+    //   (a_base * b_quote) + 
+    //   (a_quote * b_base) / k_base +
+    //   (b_base * b_quote) / k_base
+    // = a * k_quote + b + c / k_base + d / k_base
+    //
+    a * k_quote + b + (c + d) / k_base
+}
+
 pub fn quote_price_fmt(price: u64, market: &Market) -> String {
     format!("{}{}", price_fmt(price, market.quote_decimals), market.quote_asset.symbol)
 }
@@ -96,3 +129,17 @@ impl fmt::Display for Order {
 }
 
 
+#[test]
+fn test_calculate_value() {
+    let quantity = 150;
+    let price = 200;
+    let base_decimals = 1;
+    let quote_decimals = 2;
+    let value = calculate_value(quantity, price, base_decimals, quote_decimals);
+    println!("Calculated {} x {} = {} ({})", 
+        price_fmt(quantity, base_decimals), 
+        price_fmt(price, quote_decimals), 
+        price_fmt(value, 2),
+        value);
+    assert_eq!(value, 3000);
+}
