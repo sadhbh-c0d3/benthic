@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
-use crate::{order::*, order_book::{OrderBook, OrderQuantity}, execution_policy::{ExecuteAllways, ExecutionPolicy}};
+use crate::{execution_policy::{ExecuteAllways, ExecutionPolicy}, margin::MarginManager, order::*, order_book::{OrderBook, OrderQuantity}};
 
 pub trait OrderBookManager {
     fn get_order_book(&self, symbol: &String) -> Option<Rc<RefCell<OrderBook>>>;
@@ -149,8 +149,12 @@ fn test_order_book() {
     ]));
 
     let mut order_manager = OrderManager::new(order_books);
-    let execution_policy = LogExecutions::new(ExecuteAllways{});
-
+    let mut margin_manager = MarginManager::new();
+    margin_manager.add_participant(1001);
+    margin_manager.add_participant(1002);
+    //let execution_policy = LogExecutions::new(ExecuteAllways{});
+    let execution_policy = LogExecutions::new(margin_manager);
+    
     let orders = [
         Rc::new(Order{
             market: market_btc_usdt.clone(),
