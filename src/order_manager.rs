@@ -7,7 +7,7 @@ pub trait OrderBookManager {
 }
 
 pub struct OrderBooks {
-    pub books: HashMap<String, Rc<RefCell<OrderBook>>>
+    books: HashMap<String, Rc<RefCell<OrderBook>>>
 }
 
 impl OrderBooks {
@@ -26,8 +26,8 @@ impl OrderBookManager for OrderBooks {
 }
 
 pub struct OrderManager {
-    pub book_manager: Rc<dyn OrderBookManager>,
-    pub orders: HashMap<(usize, usize), Rc<Order>>
+    book_manager: Rc<dyn OrderBookManager>,
+    orders: HashMap<(usize, usize), Rc<Order>>
 }
 
 impl OrderManager {

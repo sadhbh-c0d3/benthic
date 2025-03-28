@@ -60,7 +60,7 @@ impl ExecutionPolicy for ExecuteAllways {
 pub struct PriceLevel
 {
     pub price: u64,
-    pub orders: RefCell<VecDeque<OrderQuantity>>,
+    orders: RefCell<VecDeque<OrderQuantity>>,
     link: RBTreeLink
 }
 
@@ -110,7 +110,7 @@ impl<'a> KeyAdapter<'a> for PriceLevelAdapter {
 #[derive(Default)]
 pub struct PriceLevels
 {
-    pub levels: RBTree<PriceLevelAdapter>
+    levels: RBTree<PriceLevelAdapter>
 }
 
 impl PriceLevels {
@@ -209,8 +209,8 @@ impl PriceLevels {
 pub struct OrderBook
 {
     pub market: Rc<Market>,
-    pub bid: PriceLevels,
-    pub ask: PriceLevels
+    bid: PriceLevels,
+    ask: PriceLevels
 }
 
 impl OrderBook {
