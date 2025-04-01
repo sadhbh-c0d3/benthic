@@ -152,6 +152,20 @@ fn test_calculate_value() {
         price_fmt(value, 2),
         value);
     assert_eq!(value, 3000);
+
+    let base_asset_decimals = 2;
+    let quote_asset_decimals = 1;
+    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals);
+    println!("Changed decimals {} => {}",
+        price_fmt(quantity, base_decimals),
+        price_fmt(quantity_changed, base_asset_decimals));
+    assert_eq!(quantity_changed, 1500);
+
+    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals);
+    println!("Changed decimals {} => {}",
+        price_fmt(value, quote_decimals),
+        price_fmt(value_changed, quote_asset_decimals));
+    assert_eq!(value_changed, 300);
 }
 
 #[test]
