@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
-use crate::{execution_policy::ExecutionPolicy, order::*, order_book::OrderQuantity};
+use crate::{execution_policy::{self, ExecutionPolicy}, order::*, order_book::OrderQuantity};
 
 #[derive(Default)]
 pub struct MarginLot {
@@ -72,15 +72,24 @@ impl Margin {
                                     order_quantity.order.market.base_decimals,
                                     order_quantity.order.market.quote_decimals);
                         
+                        let order_quantity_changed = change_decimals(order_quantity.quantity,
+                            order_quantity.order.market.base_decimals,
+                            base_margin_data_mut.asset.decimals);
+
+                        let order_value_changed = change_decimals(
+                            order_value,
+                            order_quantity.order.market.quote_decimals,
+                            quote_margin_data_mut.asset.decimals);
+
                         // TODO: Move this logic into MarginData
                         match limit.side {
                             Side::Ask => {
-                                base_margin_data_mut.deliver.quantity_open += order_quantity.quantity;
-                                quote_margin_data_mut.receive.quantity_open += order_value;
+                                base_margin_data_mut.deliver.quantity_open += order_quantity_changed;
+                                quote_margin_data_mut.receive.quantity_open += order_value_changed;
                             },
                             Side::Bid => {
-                                base_margin_data_mut.receive.quantity_open += order_quantity.quantity;
-                                quote_margin_data_mut.deliver.quantity_open += order_value;
+                                base_margin_data_mut.receive.quantity_open += order_quantity_changed;
+                                quote_margin_data_mut.deliver.quantity_open += order_value_changed;
                             }
                         }
                         Ok(())
@@ -115,27 +124,36 @@ impl Margin {
                             order_quantity.order.market.base_decimals,
                             order_quantity.order.market.quote_decimals);
                     
+                    let executed_quantity_changed = change_decimals(*executed_quantity,
+                        order_quantity.order.market.base_decimals,
+                        base_margin_data_mut.asset.decimals);
+
+                    let order_value_changed = change_decimals(
+                        order_value,
+                        order_quantity.order.market.quote_decimals,
+                        quote_margin_data_mut.asset.decimals);
+
                     // TODO: Move this logic into MarginData
                     // base_margin_data_mut.match_and_lock_lots(limit.side, *executed_quantity);
                     // quote_margin_data_mut.match_and_lock_lots(limit.side.opposite(), order_value);
 
                     match limit.side {
                         Side::Ask => {
-                            base_margin_data_mut.deliver.quantity_locked += *executed_quantity;
-                            quote_margin_data_mut.receive.quantity_locked += order_value;
+                            base_margin_data_mut.deliver.quantity_locked += executed_quantity_changed;
+                            quote_margin_data_mut.receive.quantity_locked += order_value_changed;
 
                             if !is_aggressor {
-                                base_margin_data_mut.deliver.quantity_open -= *executed_quantity;
-                                quote_margin_data_mut.receive.quantity_open -= order_value;
+                                base_margin_data_mut.deliver.quantity_open -= executed_quantity_changed;
+                                quote_margin_data_mut.receive.quantity_open -= order_value_changed;
                             }
                         },
                         Side::Bid => {
-                            base_margin_data_mut.receive.quantity_locked += *executed_quantity;
-                            quote_margin_data_mut.deliver.quantity_locked += order_value;
+                            base_margin_data_mut.receive.quantity_locked += executed_quantity_changed;
+                            quote_margin_data_mut.deliver.quantity_locked += order_value_changed;
 
                             if !is_aggressor {
-                                base_margin_data_mut.receive.quantity_open -= *executed_quantity;
-                                quote_margin_data_mut.deliver.quantity_open -= order_value;
+                                base_margin_data_mut.receive.quantity_open -= executed_quantity_changed;
+                                quote_margin_data_mut.deliver.quantity_open -= order_value_changed;
                             }
                         }
                     };
@@ -171,24 +189,33 @@ impl Margin {
                             order_quantity.order.market.base_decimals,
                             order_quantity.order.market.quote_decimals);
                     
+                    let executed_quantity_changed = change_decimals(executed_quantity,
+                        order_quantity.order.market.base_decimals,
+                        base_margin_data_mut.asset.decimals);
+
+                    let order_value_changed = change_decimals(
+                        order_value,
+                        order_quantity.order.market.quote_decimals,
+                        quote_margin_data_mut.asset.decimals);
+
                     // TODO: Move this logic into MarginData
                     // base_margin_data_mut.match_and_commmit_lots(limit.side, *executed_quantity);
                     // quote_margin_data_mut.match_and_commit_lots(limit.side.opposite(), order_value);
                     
                     match limit.side {
                         Side::Ask => {
-                            base_margin_data_mut.deliver.quantity_committed += executed_quantity;
-                            quote_margin_data_mut.receive.quantity_committed += order_value;
+                            base_margin_data_mut.deliver.quantity_committed += executed_quantity_changed;
+                            quote_margin_data_mut.receive.quantity_committed += order_value_changed;
 
-                            base_margin_data_mut.deliver.quantity_locked -= executed_quantity;
-                            quote_margin_data_mut.receive.quantity_locked -= order_value;
+                            base_margin_data_mut.deliver.quantity_locked -= executed_quantity_changed;
+                            quote_margin_data_mut.receive.quantity_locked -= order_value_changed;
                         },
                         Side::Bid => {
-                            base_margin_data_mut.receive.quantity_committed += executed_quantity;
-                            quote_margin_data_mut.deliver.quantity_committed += order_value;
+                            base_margin_data_mut.receive.quantity_committed += executed_quantity_changed;
+                            quote_margin_data_mut.deliver.quantity_committed += order_value_changed;
 
-                            base_margin_data_mut.receive.quantity_locked -= executed_quantity;
-                            quote_margin_data_mut.deliver.quantity_locked -= order_value;
+                            base_margin_data_mut.receive.quantity_locked -= executed_quantity_changed;
+                            quote_margin_data_mut.deliver.quantity_locked -= order_value_changed;
                         }
                     };
                     

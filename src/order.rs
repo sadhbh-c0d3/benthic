@@ -67,6 +67,16 @@ pub fn price_fmt(price: u64, decimals: u8) -> String {
     format!("{}.{}", a, b)
 }
 
+pub fn change_decimals(quantity: u64, from_decimals: u8, to_decimals: u8) -> u64 {
+    let decimal_base: u64 = 10;
+    if from_decimals < to_decimals {
+        quantity * decimal_base.pow((to_decimals as u32) - (from_decimals as u32))
+    }
+    else {
+        quantity / decimal_base.pow((from_decimals as u32) - (to_decimals as u32))
+    }
+}
+
 pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decimals: u8) -> u64 {
     let decimal_base: u64 = 10;
 
@@ -157,4 +167,19 @@ fn test_calculate_value_2() {
         price_fmt(value, quote_decimals),
         value);
     assert_eq!(value, 62500);
+
+    let base_asset_decimals = 7;
+    let quote_asset_decimals = 6;
+    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals);
+    println!("Changed decimals {} => {}",
+        price_fmt(quantity, base_decimals),
+        price_fmt(quantity_changed, base_asset_decimals));
+    assert_eq!(quantity_changed, 5000000);
+
+    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals);
+    println!("Changed decimals {} => {}",
+        price_fmt(value, quote_decimals),
+        price_fmt(value_changed, quote_asset_decimals));
+    assert_eq!(value_changed, 6250000);
+
 }
