@@ -67,26 +67,30 @@ pub fn price_fmt(price: u64, decimals: u8) -> String {
     format!("{}.{}", a, b)
 }
 
-pub fn change_decimals(quantity: u64, from_decimals: u8, to_decimals: u8) -> u64 {
+pub fn change_decimals(quantity: u64, from_decimals: u8, to_decimals: u8) -> Option<u64> {
     let decimal_base: u64 = 10;
     if from_decimals < to_decimals {
-        quantity * decimal_base.pow((to_decimals as u32) - (from_decimals as u32))
+        quantity.checked_mul(
+            decimal_base.checked_pow((to_decimals as u32) - (from_decimals as u32))?
+        )
     }
     else {
-        quantity / decimal_base.pow((from_decimals as u32) - (to_decimals as u32))
+        quantity.checked_div(
+            decimal_base.checked_pow((from_decimals as u32) - (to_decimals as u32))?
+        )
     }
 }
 
-pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decimals: u8) -> u64 {
+pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decimals: u8) -> Option<u64> {
     let decimal_base: u64 = 10;
 
     // base = a_base * k_base + b_base
-    let k_base = decimal_base.pow(base_decimals as u32);
+    let k_base = decimal_base.checked_pow(base_decimals as u32)?;
     let a_base = quantity / k_base;
     let b_base = quantity % k_base;
 
     // quote = a_quote * k_quote + b_quote
-    let k_quote = decimal_base.pow(quote_decimals as u32);
+    let k_quote = decimal_base.checked_pow(quote_decimals as u32)?;
     let a_quote = price / k_quote;
     let b_quote = price % k_quote;
 
@@ -95,10 +99,10 @@ pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decim
     //   (a_base * b_quote * k_base) + 
     //   (a_quote * b_base * k_quote) +
     //   (b_base * b_quote)
-    let a = a_base * a_quote; // * (k_base * k_quote)
-    let b = a_base * b_quote; // * (k_base)
-    let c = a_quote * b_base; // * (k_quote)
-    let d = b_base * b_quote; // * 1
+    let a = a_base.checked_mul(a_quote)?; // * (k_base * k_quote)
+    let b = a_base.checked_mul(b_quote)?; // * (k_base)
+    let c = a_quote.checked_mul(b_base)?; // * (k_quote)
+    let d = b_base.checked_mul(b_quote)?; // * 1
 
     // base * quote / k_base
     // = (a_base * a_quote * k_quote) + 
@@ -107,7 +111,12 @@ pub fn calculate_value(quantity: u64, price: u64, base_decimals: u8, quote_decim
     //   (b_base * b_quote) / k_base
     // = a * k_quote + b + c / k_base + d / k_base
     //
-    a * k_quote + b + (c * k_quote + d) / k_base
+    a.checked_mul(k_quote)?
+        .checked_add(b)?
+        .checked_add(
+            c.checked_mul(k_quote)?.checked_add(d)?
+            .checked_div(k_base)?
+        )
 }
 
 pub fn quote_price_fmt(price: u64, market: &Market) -> String {
@@ -145,7 +154,7 @@ fn test_calculate_value() {
     let price = 200;
     let base_decimals = 1;
     let quote_decimals = 2;
-    let value = calculate_value(quantity, price, base_decimals, quote_decimals);
+    let value = calculate_value(quantity, price, base_decimals, quote_decimals).unwrap();
     println!("Calculated {} x {} = {} ({})", 
         price_fmt(quantity, base_decimals), 
         price_fmt(price, quote_decimals), 
@@ -155,13 +164,13 @@ fn test_calculate_value() {
 
     let base_asset_decimals = 2;
     let quote_asset_decimals = 1;
-    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals);
+    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals).unwrap();
     println!("Changed decimals {} => {}",
         price_fmt(quantity, base_decimals),
         price_fmt(quantity_changed, base_asset_decimals));
     assert_eq!(quantity_changed, 1500);
 
-    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals);
+    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals).unwrap();
     println!("Changed decimals {} => {}",
         price_fmt(value, quote_decimals),
         price_fmt(value_changed, quote_asset_decimals));
@@ -174,7 +183,7 @@ fn test_calculate_value_2() {
     let price = 125000;
     let base_decimals = 5;
     let quote_decimals = 4;
-    let value = calculate_value(quantity, price, base_decimals, quote_decimals);
+    let value = calculate_value(quantity, price, base_decimals, quote_decimals).unwrap();
     println!("Calculated {} x {} = {} ({})", 
         price_fmt(quantity, base_decimals), 
         price_fmt(price, quote_decimals), 
@@ -184,13 +193,13 @@ fn test_calculate_value_2() {
 
     let base_asset_decimals = 7;
     let quote_asset_decimals = 6;
-    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals);
+    let quantity_changed = change_decimals(quantity, base_decimals, base_asset_decimals).unwrap();
     println!("Changed decimals {} => {}",
         price_fmt(quantity, base_decimals),
         price_fmt(quantity_changed, base_asset_decimals));
     assert_eq!(quantity_changed, 5000000);
 
-    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals);
+    let value_changed = change_decimals(value, quote_decimals, quote_asset_decimals).unwrap();
     println!("Changed decimals {} => {}",
         price_fmt(value, quote_decimals),
         price_fmt(value_changed, quote_asset_decimals));

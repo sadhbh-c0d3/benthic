@@ -1,6 +1,6 @@
 use std::{cell::RefCell, cmp::min, collections::VecDeque, rc::Rc};
 
-use intrusive_collections::{intrusive_adapter, Bound, KeyAdapter, RBTree, RBTreeLink};
+use intrusive_collections::{intrusive_adapter, rbtree::CursorMut, Bound, KeyAdapter, RBTree, RBTreeLink};
 
 use crate::{execution_policy::ExecutionPolicy, order::*};
 
@@ -44,8 +44,8 @@ impl PriceLevel {
         }
     }
 
-    pub fn place_order(&self, book_order: OrderQuantity, execution_policy: &impl ExecutionPolicy) {
-        if let Ok(()) = execution_policy.place_order(&book_order) {
+    pub fn place_order(&self, mut book_order: OrderQuantity, execution_policy: &impl ExecutionPolicy) {
+        if let Ok(()) = execution_policy.place_order(&mut book_order) {
             self.orders.borrow_mut().push_back(book_order);
         }
     }
@@ -82,72 +82,114 @@ pub struct PriceLevels
     levels: RBTree<PriceLevelAdapter>
 }
 
-impl PriceLevels {
-    pub fn match_market_order(&mut self, order_quantity: &mut OrderQuantity, market_order: &MarketOrder, execution_policy: &impl ExecutionPolicy) {
-        // TODO: FIX repeated code: WET Code - repeated for Bid and Ask, and then for LimitOrder
-        match market_order.side {
-            Side::Bid => {
-                let mut cursor = self.levels.front_mut();
-                while let Some(level) = cursor.get() {
-                    if order_quantity.quantity == 0 {
-                        break;
-                    }
-                    level.match_order(order_quantity, execution_policy);
-                    if level.is_empty() {
-                        cursor.remove();
-                    }
-                    cursor.move_next();
-                }
-            },
-            Side::Ask => {
-                let mut cursor = self.levels.back_mut();
-                while let Some(level) = cursor.get() {
-                    if order_quantity.quantity == 0 {
-                        break;
-                    }
-                    level.match_order(order_quantity, execution_policy);
-                    if level.is_empty() {
-                        cursor.remove();
-                    }
-                    cursor.move_prev();
-                }
-            },
-        }
+trait PriceLevelMatchOps {
+    fn begin_ops<'a>(&self, levels: &'a mut RBTree<PriceLevelAdapter>) -> CursorMut<'a, PriceLevelAdapter>;
+    fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>);
+    fn is_finished(&self, order_quantity: &OrderQuantity, price: u64) -> bool;
+}
+
+struct MarketMatchOps {
+    side: Side,
+}
+
+impl MarketMatchOps {
+    fn new(side: Side) -> Self {
+        Self { side }
     }
-    
-    pub fn match_limit_order(&mut self, order_quantity: &mut OrderQuantity, limit: &LimitOrder, execution_policy: &impl ExecutionPolicy) {
-        // TODO: FIX repeated code: WET Code - repeated for Bid and Ask, and then for MarketOrder
-        match limit.side {
-            Side::Bid => {
-                let mut cursor = self.levels.front_mut();
-                while let Some(level) = cursor.get() {
-                    if level.price < limit.price && order_quantity.quantity == 0 {
-                        break;
-                    }
-                    level.match_order(order_quantity, execution_policy);
-                    if level.is_empty() {
-                        cursor.remove();
-                    }
-                    cursor.move_next();
-                }
-            },
-            Side::Ask => {
-                let mut cursor = self.levels.back_mut();
-                while let Some(level) = cursor.get() {
-                    if level.price > limit.price && order_quantity.quantity == 0 {
-                        break;
-                    }
-                    level.match_order(order_quantity, execution_policy);
-                    if level.is_empty() {
-                        cursor.remove();
-                    }
-                    cursor.move_prev();
-                }
-            },
+}
+
+impl PriceLevelMatchOps for MarketMatchOps {
+    fn begin_ops<'a>(&self, levels: &'a mut RBTree<PriceLevelAdapter>) -> CursorMut<'a, PriceLevelAdapter> {
+        match self.side {
+            Side::Bid => levels.front_mut(),
+            Side::Ask => levels.back_mut(),
         }
     }
 
-    pub fn place_limit_order(&mut self, order_quantity: OrderQuantity, limit: &LimitOrder, execution_policy: &impl ExecutionPolicy) {
+    fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
+        match self.side {
+            Side::Bid => cursor.move_next(),
+            Side::Ask => cursor.move_prev(),
+        }
+    }
+
+    fn is_finished(&self, order_quantity: &OrderQuantity, _price: u64) -> bool {
+        order_quantity.quantity == 0
+    }
+}
+
+struct LimitMatchOps {
+    side: Side,
+    limit_price: u64,
+}
+
+impl LimitMatchOps {
+    fn new(side: Side, limit_price: u64) -> Self {
+        Self { side, limit_price }
+    }
+}
+
+impl PriceLevelMatchOps for LimitMatchOps {
+    fn begin_ops<'a>(&self, levels: &'a mut RBTree<PriceLevelAdapter>) -> CursorMut<'a, PriceLevelAdapter> {
+        match self.side {
+            Side::Bid => levels.front_mut(),
+            Side::Ask => levels.back_mut(),
+        }
+    }
+
+    fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
+        match self.side {
+            Side::Bid => cursor.move_next(),
+            Side::Ask => cursor.move_prev(),
+        }
+    }
+
+    fn is_finished(&self, order_quantity: &OrderQuantity, price: u64) -> bool {
+        order_quantity.quantity == 0 || match self.side {
+            Side::Bid => price > self.limit_price,
+            Side::Ask => price < self.limit_price,
+        }
+    }
+}
+
+impl PriceLevels {
+    fn match_order_side(
+        &mut self,
+        order_quantity: &mut OrderQuantity,
+        execution_policy: &impl ExecutionPolicy,
+        ops: &impl PriceLevelMatchOps) {
+        let mut cursor = ops.begin_ops(&mut self.levels);
+
+        while let Some(level) = cursor.get() {
+            if ops.is_finished(order_quantity, level.price) {
+                break;
+            }
+
+            level.match_order(order_quantity, execution_policy);
+            if level.is_empty() {
+                cursor.remove();
+            }
+            ops.move_next(&mut cursor);
+        }
+    }
+
+    pub fn match_market_order(
+        &mut self,
+        order_quantity: &mut OrderQuantity,
+        market_order: &MarketOrder,
+        execution_policy: &impl ExecutionPolicy) {
+        self.match_order_side(order_quantity, execution_policy, &MarketMatchOps::new(market_order.side));
+    }
+
+    pub fn match_limit_order(
+        &mut self,
+        order_quantity: &mut OrderQuantity,
+        limit: &LimitOrder,
+        execution_policy: &impl ExecutionPolicy) {
+        self.match_order_side(order_quantity, execution_policy, &LimitMatchOps::new(limit.side, limit.price));
+    }
+
+    pub fn place_limit_order(&mut self, mut order_quantity: OrderQuantity, limit: &LimitOrder, execution_policy: &impl ExecutionPolicy) {
         let mut cursor = self.levels.lower_bound_mut(Bound::Included(&limit.price));
 
         if let Some(level) = cursor.get() {
@@ -157,14 +199,14 @@ impl PriceLevels {
             }
             else {
                 // There exists level before, which we should insert new level
-                if let Ok(()) = execution_policy.place_order(&order_quantity) {
+                if let Ok(()) = execution_policy.place_order(&mut order_quantity) {
                     cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
                 }
             }
         }
         else {
             // We should insert at the end
-            if let Ok(()) = execution_policy.place_order(&order_quantity) {
+            if let Ok(()) = execution_policy.place_order(&mut order_quantity) {
                 cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
             }
         }

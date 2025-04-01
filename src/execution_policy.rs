@@ -4,14 +4,14 @@ use crate::order_book::OrderQuantity;
 
 
 pub trait ExecutionPolicy {
-    fn place_order(&self, order_quantity: &OrderQuantity) -> Result<(), Box<dyn Error>>;
+    fn place_order(&self, order_quantity: &mut OrderQuantity) -> Result<(), Box<dyn Error>>;
     fn execute_orders(&self, executed_quantity: &mut u64, aggressor_order: &mut OrderQuantity, book_order: &mut OrderQuantity) -> Result<(), Box<dyn Error>>;
 }
 
 pub struct ExecuteAllways;
 
 impl ExecutionPolicy for ExecuteAllways {
-    fn place_order(&self, book_order: &OrderQuantity) -> Result<(), Box<dyn Error>> {
+    fn place_order(&self, book_order: &mut OrderQuantity) -> Result<(), Box<dyn Error>> {
         // TODO: Check available balance/margine for participant
         if book_order.quantity > 0 {
             Ok(())

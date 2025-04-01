@@ -65,7 +65,7 @@ impl<T> LogExecutions<T> where T: ExecutionPolicy {
 }
 
 impl<T> ExecutionPolicy for LogExecutions<T> where T: ExecutionPolicy {
-    fn place_order(&self, order_quantity: &OrderQuantity) -> Result<(), Box<dyn Error>>{
+    fn place_order(&self, order_quantity: &mut OrderQuantity) -> Result<(), Box<dyn Error>>{
         if let Err(err) = self.policy.place_order(order_quantity) {
             println!("Cancel: {} on: {} Order({}:{}): {} - Reason: {}", 
                 base_quantity_fmt(order_quantity.quantity, &order_quantity.order.market),

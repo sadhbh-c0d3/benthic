@@ -54,7 +54,7 @@ impl Margin {
         self.portfolio.get(asset)
     }
 
-    pub fn place_order(&mut self, order_quantity: &OrderQuantity) -> Result<(), Box<dyn Error>> {
+    pub fn place_order(&mut self, order_quantity: &mut OrderQuantity) -> Result<(), Box<dyn Error>> {
         // TODO: Check avaliable balance/margin for open orders
 
         if let Some(base_margin_data) = self.get_margin_data_mut(&order_quantity.order.market.base_asset.symbol) {
@@ -70,16 +70,16 @@ impl Margin {
                                     order_quantity.quantity,
                                     limit.price, 
                                     order_quantity.order.market.base_decimals,
-                                    order_quantity.order.market.quote_decimals);
+                                    order_quantity.order.market.quote_decimals).ok_or("Mathematical overflow")?;
                         
                         let order_quantity_changed = change_decimals(order_quantity.quantity,
                             order_quantity.order.market.base_decimals,
-                            base_margin_data_mut.asset.decimals);
+                            base_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                         let order_value_changed = change_decimals(
                             order_value,
                             order_quantity.order.market.quote_decimals,
-                            quote_margin_data_mut.asset.decimals);
+                            quote_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                         // TODO: Move this logic into MarginData
                         match limit.side {
@@ -122,16 +122,16 @@ impl Margin {
                             *executed_quantity,
                             limit.price, 
                             order_quantity.order.market.base_decimals,
-                            order_quantity.order.market.quote_decimals);
+                            order_quantity.order.market.quote_decimals).ok_or("Mathematical overflow")?;
                     
                     let executed_quantity_changed = change_decimals(*executed_quantity,
                         order_quantity.order.market.base_decimals,
-                        base_margin_data_mut.asset.decimals);
+                        base_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                     let order_value_changed = change_decimals(
                         order_value,
                         order_quantity.order.market.quote_decimals,
-                        quote_margin_data_mut.asset.decimals);
+                        quote_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                     // TODO: Move this logic into MarginData
                     // base_margin_data_mut.match_and_lock_lots(limit.side, *executed_quantity);
@@ -187,16 +187,16 @@ impl Margin {
                             executed_quantity,
                             limit.price, 
                             order_quantity.order.market.base_decimals,
-                            order_quantity.order.market.quote_decimals);
+                            order_quantity.order.market.quote_decimals).ok_or("Mathematical overflow")?;;
                     
                     let executed_quantity_changed = change_decimals(executed_quantity,
                         order_quantity.order.market.base_decimals,
-                        base_margin_data_mut.asset.decimals);
+                        base_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                     let order_value_changed = change_decimals(
                         order_value,
                         order_quantity.order.market.quote_decimals,
-                        quote_margin_data_mut.asset.decimals);
+                        quote_margin_data_mut.asset.decimals).ok_or("Mathematical overflow")?;
 
                     // TODO: Move this logic into MarginData
                     // base_margin_data_mut.match_and_commmit_lots(limit.side, *executed_quantity);
@@ -255,7 +255,7 @@ impl MarginManager {
 }
 
 impl ExecutionPolicy for MarginManager {
-    fn place_order(&self, order_quantity: &OrderQuantity) -> Result<(), Box<dyn Error>> {
+    fn place_order(&self, order_quantity: &mut OrderQuantity) -> Result<(), Box<dyn Error>> {
         if order_quantity.quantity > 0 {
             if let Some(margin) = self.margins.get(&order_quantity.order.participant_id) {
                 margin.borrow_mut().place_order(order_quantity)
