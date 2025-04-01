@@ -101,15 +101,15 @@ impl MarketMatchOps {
 impl PriceLevelMatchOps for MarketMatchOps {
     fn begin_ops<'a>(&self, levels: &'a mut RBTree<PriceLevelAdapter>) -> CursorMut<'a, PriceLevelAdapter> {
         match self.side {
-            Side::Bid => levels.front_mut(),
-            Side::Ask => levels.back_mut(),
+            Side::Bid => levels.back_mut(),
+            Side::Ask => levels.front_mut(),
         }
     }
 
     fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
         match self.side {
-            Side::Bid => cursor.move_next(),
-            Side::Ask => cursor.move_prev(),
+            Side::Bid => cursor.move_prev(),
+            Side::Ask => cursor.move_next(),
         }
     }
 
@@ -132,22 +132,22 @@ impl LimitMatchOps {
 impl PriceLevelMatchOps for LimitMatchOps {
     fn begin_ops<'a>(&self, levels: &'a mut RBTree<PriceLevelAdapter>) -> CursorMut<'a, PriceLevelAdapter> {
         match self.side {
-            Side::Bid => levels.front_mut(),
-            Side::Ask => levels.back_mut(),
+            Side::Bid => levels.back_mut(),
+            Side::Ask => levels.front_mut(),
         }
     }
 
     fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
         match self.side {
-            Side::Bid => cursor.move_next(),
-            Side::Ask => cursor.move_prev(),
+            Side::Bid => cursor.move_prev(),
+            Side::Ask => cursor.move_next(),
         }
     }
 
     fn is_finished(&self, order_quantity: &OrderQuantity, price: u64) -> bool {
         order_quantity.quantity == 0 || match self.side {
-            Side::Bid => price > self.limit_price,
-            Side::Ask => price < self.limit_price,
+            Side::Bid => price < self.limit_price,
+            Side::Ask => price > self.limit_price,
         }
     }
 }
