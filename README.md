@@ -1,6 +1,8 @@
 # Benthic
 Crypto Exchange in Rust
 
+[![Watch My Video!](https://img.youtube.com/vi/plTm7eEDebw/0.jpg)](https://youtu.be/plTm7eEDebw&list=PLAetEEjGZI7OUBYFoQvI0QcO9GKAvT1xT&index=1)
+
 ## Why Benthic?
 "Benthic" directly refers to the bottom of the sea, where crabs live, establishing a clear link to the crab theme.
 
