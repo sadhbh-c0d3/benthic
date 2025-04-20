@@ -221,7 +221,8 @@ where
         aggressor_order: &OrderQuantity,
         book_order: &OrderQuantity,
     ) {
-        self.policy.handle_order_executed(executed_quantity, aggressor_order, book_order);
+        self.policy
+            .handle_order_executed(executed_quantity, aggressor_order, book_order);
         println!(
             "Market   <-- Trade({}):             {:24} <- (Order({}:{}): {}) x (Order({}:{}): {})",
             aggressor_order.order.market.symbol,
