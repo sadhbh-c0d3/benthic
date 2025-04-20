@@ -110,12 +110,12 @@ trait PriceLevelMatchOps {
 }
 
 struct MarketMatchOps {
-    side: Side,
+    book_side: Side,
 }
 
 impl MarketMatchOps {
-    fn new(side: Side) -> Self {
-        Self { side }
+    fn new(order_side: Side) -> Self {
+        Self { book_side: order_side.opposite() }
     }
 }
 
@@ -124,14 +124,14 @@ impl PriceLevelMatchOps for MarketMatchOps {
         &self,
         levels: &'a mut RBTree<PriceLevelAdapter>,
     ) -> CursorMut<'a, PriceLevelAdapter> {
-        match self.side {
+        match self.book_side {
             Side::Bid => levels.back_mut(),
             Side::Ask => levels.front_mut(),
         }
     }
 
     fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
-        match self.side {
+        match self.book_side {
             Side::Bid => cursor.move_prev(),
             Side::Ask => cursor.move_next(),
         }
@@ -143,13 +143,13 @@ impl PriceLevelMatchOps for MarketMatchOps {
 }
 
 struct LimitMatchOps {
-    side: Side,
+    book_side: Side,
     limit_price: u64,
 }
 
 impl LimitMatchOps {
-    fn new(side: Side, limit_price: u64) -> Self {
-        Self { side, limit_price }
+    fn new(order_side: Side, limit_price: u64) -> Self {
+        Self { book_side: order_side.opposite(), limit_price }
     }
 }
 
@@ -158,14 +158,14 @@ impl PriceLevelMatchOps for LimitMatchOps {
         &self,
         levels: &'a mut RBTree<PriceLevelAdapter>,
     ) -> CursorMut<'a, PriceLevelAdapter> {
-        match self.side {
+        match self.book_side {
             Side::Bid => levels.back_mut(),
             Side::Ask => levels.front_mut(),
         }
     }
 
     fn move_next<'a>(&self, cursor: &mut CursorMut<'a, PriceLevelAdapter>) {
-        match self.side {
+        match self.book_side {
             Side::Bid => cursor.move_prev(),
             Side::Ask => cursor.move_next(),
         }
@@ -173,9 +173,9 @@ impl PriceLevelMatchOps for LimitMatchOps {
 
     fn is_finished(&self, order_quantity: &OrderQuantity, level_price: u64) -> bool {
         order_quantity.quantity == 0
-            || match self.side {
-                Side::Bid => level_price > self.limit_price,
-                Side::Ask => level_price < self.limit_price,
+            || match self.book_side {
+                Side::Bid => level_price < self.limit_price,
+                Side::Ask => level_price > self.limit_price,
             }
     }
 }
