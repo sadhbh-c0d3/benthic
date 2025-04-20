@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 intrusive-collections = "0.9.7"
+itertools = "0.14.0"
