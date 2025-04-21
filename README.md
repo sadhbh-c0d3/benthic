@@ -25,7 +25,7 @@ establishing a clear link to the Rustacean theme.
   handling of "inflight lots" from executed transactions.
 * **Decimal Handling**: Efficient representation of decimal prices and
   quantities using `u64`.
-* **Polynomial Decomposition** for Multiplication: Demonstration of an optimized
+* **Polynomial Decomposition for Multiplication**: Demonstration of an optimized
   multiplication technique for decimal values.
 
 ##  Getting Started
