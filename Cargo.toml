@@ -3,6 +3,10 @@ name = "benthic"
 version = "0.1.0"
 edition = "2021"
 
+[[example]]
+name = "order_execution"
+path = "examples/order_execution.rs"
+
 [dependencies]
 intrusive-collections = "0.9.7"
 itertools = "0.14.0"
