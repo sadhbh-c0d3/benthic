@@ -5,8 +5,8 @@
 **Dive into the Rust-powered core of a cryptocurrency exchange!**
 
 This project, ***Benthic*** (referring to the bottom of the sea, home to crabs
-🦀), showcases *the fundamental components for order execution and more, as
-featured in my "C++ *vs Rust" series on YouTube.
+🦀), showcases *the* fundamental components for order execution and more, as
+featured in my "C++ *vs* Rust" series on YouTube.
 
 ## Why Benthic?
 
