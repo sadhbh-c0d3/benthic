@@ -15,17 +15,17 @@ establishing a clear link to the Rustacean theme.
 
 ## Key Functionalities
 
-* **Order Matching**: Implementation of a matching engine for efficiently
+* **Order Matching:** Implementation of a matching engine for efficiently
   pairing buy and sell orders.
-* **Margin Component**: Architectural design and structure of a margin handling
+* **Margin Component:** Architectural design and structure of a margin handling
   component.
-* **Account Management**: Real-time updating of trader balances and asset
+* **Account Management:** Real-time updating of trader balances and asset
   positions with subaccount support for managing open and closed lots.
-* **Lot Management**: Tracking the lifecycle of trading lots, including the
+* **Lot Management:** Tracking the lifecycle of trading lots, including the
   handling of "inflight lots" from executed transactions.
-* **Decimal Handling**: Efficient representation of decimal prices and
+* **Decimal Handling:** Efficient representation of decimal prices and
   quantities using `u64`.
-* **Polynomial Decomposition for Multiplication**: Demonstration of an optimized
+* **Polynomial Decomposition for Multiplication:** Demonstration of an optimized
   multiplication technique for decimal values.
 
 ##  Getting Started
