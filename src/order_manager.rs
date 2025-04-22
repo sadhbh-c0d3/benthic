@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
 use crate::{
     execution_policy::ExecutionPolicy,
+    margin::{MarginLot, MarginLotEventHandler},
     market_data_policy::MarketDataPolicy,
     order::*,
     order_book::{OrderBook, OrderQuantity},
@@ -147,7 +148,7 @@ where
             .execute_orders(executed_quantity, aggressor_order, book_order)
         {
             // Execution failed/rejected - TODO: Possibly bool might not be enough, should use Result
-            println!("Execution rejected");
+            println!("Execution rejected - Reason: {err}");
             Err(err)
         } else {
             println!(
@@ -234,5 +235,79 @@ where
             book_order.order.order_id,
             book_order.order
         );
+    }
+}
+
+pub struct LogMarginLots<T>
+where
+    T: MarginLotEventHandler,
+{
+    handler: T,
+}
+
+impl<T> LogMarginLots<T>
+where
+    T: MarginLotEventHandler,
+{
+    pub fn new(handler: T) -> Self {
+        Self { handler }
+    }
+}
+
+impl<T> MarginLotEventHandler for LogMarginLots<T>
+where
+    T: MarginLotEventHandler,
+{
+    fn handle_lot_closed(
+        &self,
+        asset: Rc<Asset>,
+        side: Side,
+        lot: &MarginLot,
+        order: Rc<Order>,
+        price: u64,
+        account_id: usize,
+    ) {
+        println!(
+            "Margin   <-- Lot({}:{}): close {:28}    <- (Order({}:{}): {} at {})",
+            account_id,
+            asset.symbol,
+            format!(
+                "{:6} {:10} ({})",
+                lot_side(side),
+                price_fmt(lot.get_last_transaction_quantity().unwrap(), asset.decimals),
+                price_fmt(lot.quantity_left, asset.decimals)
+            ),
+            order.participant_id,
+            order.order_id,
+            order,
+            quote_price_fmt(price, &order.market)
+        );
+        self.handler.handle_lot_closed(asset, side, lot, order, price, account_id);
+    }
+
+    fn handle_lot_opened(
+        &self,
+        asset: Rc<Asset>,
+        side: Side,
+        lot: &MarginLot,
+        order: Rc<Order>,
+        price: u64,
+        account_id: usize,
+    ) {
+        println!(
+            "Margin   <-- Lot({}:{}):  open {:28}    <- (Order({}:{}): {} at {})",
+            account_id,
+            asset.symbol,
+            format!(
+                "{:6} {:10}",
+                lot_side(side),
+                price_fmt(lot.quantity_orig, asset.decimals)
+            ),
+            order.participant_id,
+            order.order_id,
+            order,
+            quote_price_fmt(price, &order.market)
+        );
+        self.handler.handle_lot_opened(asset, side, lot, order, price, account_id);
     }
 }

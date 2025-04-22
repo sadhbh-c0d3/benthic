@@ -3,11 +3,11 @@ use std::{cell::RefCell, rc::Rc};
 use itertools::Itertools;
 
 use benthic::{
-    margin::MarginManager,
+    margin::{MarginLotEventHandlerNull, MarginManager},
     market_data_policy::MarketDataNull,
     order::{price_fmt, Asset, LimitOrder, Market, Order, OrderType, Side},
     order_book::OrderBook,
-    order_manager::{LogExecutions, LogMarketData, OrderBooks, OrderManager},
+    order_manager::{LogExecutions, LogMarginLots, LogMarketData, OrderBooks, OrderManager},
 };
 
 fn main() {
@@ -65,7 +65,7 @@ fn main() {
     let trader_b = 1002;
 
     let mut order_manager = OrderManager::new(order_books);
-    let mut margin_manager = MarginManager::new();
+    let mut margin_manager = MarginManager::new(Rc::new(LogMarginLots::new(MarginLotEventHandlerNull)));
     println!("Margin  -->  create Account({})", trader_a);
     margin_manager
         .add_account(trader_a)
