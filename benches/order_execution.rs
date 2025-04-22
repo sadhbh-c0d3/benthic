@@ -8,6 +8,7 @@ use benthic::{
     order_book::OrderBook,
     order_manager::{OrderBooks, OrderManager},
 };
+use chrono::Utc;
 use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
@@ -120,7 +121,10 @@ fn benchmark_order_placement(c: &mut Criterion) {
 
     let mut rng = SmallRng::seed_from_u64(123456999);
 
-    (0..1000).for_each(|n| {
+    const NUM_TRADERS: usize = 10_000;
+    const NUM_ORDERS: usize = 10_000;
+
+    (0..NUM_TRADERS).for_each(|n| {
         margin_manager
             .add_account(n)
             .borrow_mut()
@@ -143,12 +147,12 @@ fn benchmark_order_placement(c: &mut Criterion) {
             .expect("Failed to create account");
     });
 
-    let orders = (0..100_000)
+    let orders = (0..NUM_ORDERS)
         .map(|n| {
             Rc::new(Order {
                 market: market_btc_eth.clone(),
-                order_id: 100_000 + n,
-                participant_id: rng.random_range(0..1000),
+                order_id: NUM_TRADERS + n,
+                participant_id: rng.random_range(0..NUM_TRADERS),
                 order_data: OrderType::Limit(LimitOrder {
                     side: if rng.random_bool(0.5) {
                         Side::Bid
@@ -165,12 +169,33 @@ fn benchmark_order_placement(c: &mut Criterion) {
     let execution_policy = BenchExecutions::new(margin_manager);
     let market_data_policy = MarketDataNull {};
 
+    let time_started = Utc::now();
+
     let execute_orders = |order_manager: &mut OrderManager, orders: &[Rc<Order>]| {
         for order in orders {
             let _ =
                 order_manager.place_order(order.clone(), &execution_policy, &market_data_policy);
         }
     };
+
+
+    println!(
+        "Warm-up: time {}s, orders {}, executions {}",
+        (Utc::now() - time_started).num_seconds(),
+        execution_policy.placed_order_count.borrow(),
+        execution_policy.executed_order_count.borrow(),
+    );
+
+    for _ in 0..100 {
+        execute_orders(&mut order_manager, &orders);
+    }
+
+    println!(
+        "Ready: time {}s, orders {}, executions {}",
+        (Utc::now() - time_started).num_seconds(),
+        execution_policy.placed_order_count.borrow(),
+        execution_policy.executed_order_count.borrow(),
+    );
 
     c.bench_function("order_execution_mixed", |b| {
         b.iter(|| {
@@ -179,7 +204,8 @@ fn benchmark_order_placement(c: &mut Criterion) {
     });
 
     println!(
-        "Total: orders {}, executions {}",
+        "Finished: time {}s, orders {}, executions {}",
+        (Utc::now() - time_started).num_seconds(),
         execution_policy.placed_order_count.borrow(),
         execution_policy.executed_order_count.borrow()
     );

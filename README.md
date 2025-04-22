@@ -184,3 +184,123 @@ Account  1002         (Open)      Short |       Long       (Open)
           ETH         (12.0)  11.250000 |        0.0        (0.0)
          USDT          (0.0)        0.0 |        0.0        (0.0)
 ```
+
+## Performance
+
+We measured performance using benchmark built on top of Criterion.
+
+### Running the benchmark
+
+```bash
+cargo bench
+```
+
+### Machine
+
+* **CPU:** AMD Ryzen 9 7900X3D @ 5.6GHz
+* **RAM:** PNY 6000 32GB @ 4800 MT/s
+* **MB:** Gigabyte Aorus X670 ELITE AX, BIOS: FA1
+
+### Results
+
+We have performed number of tests with varying number of orders and traders.
+
+#### 100'000 orders and 10'000 traders, only Order Book
+
+During warm-up we placed 10'000'000 limit orders on the book, and we've got 5'005'111 executions within 27s.
+
+In this test we achieve time 20.822ms per one 100'000 order batch, which is equivalent to 4'802'612 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 1s, orders 10000000, executions 5005111
+Finished: time 12s, orders 65500000, executions 32783416
+
+order_execution_mixed   time:   [19.798 ms 20.822 ms 22.076 ms]
+```
+
+
+#### 1'000'000 orders and 10'000 traders, only Order Book
+
+During warm-up we placed 100'000'000 limit orders on the book, and we've got 49'924'912 executions within 27s.
+
+In this test we achieve time 283.34ms per one 1'000'000 order batch, which is equivalent to 3'529'328 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 27s, orders 100000000, executions 49924912
+Finished: time 60s, orders 215000000, executions 107338547
+
+order_execution_mixed   time:   [278.12 ms 283.34 ms 289.82 ms]
+```
+
+#### 10'000 orders and 1'000 traders, with Margin Accounts
+
+During warm-up we placed 999'400 limit orders on the book, and we've got 489'307 executions within <1s.
+
+In this test we achieve time 22.020ms per one 10'000 order batch, which is equivalent to 454'132 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 0s, orders 999400, executions 489307
+Finished: time 18s, orders 11103334, executions 5436130
+
+order_execution_mixed   time:   [21.434 ms 22.020 ms 22.641 ms]
+```
+
+#### 10'000 orders and 10'000 traders, with Margin Accounts
+
+During warm-up we placed 999'900 limit orders on the book, and we've got 491'811 executions within <1s.
+
+In this test we achieve time 7.0406ms per one 10'000 order batch, which is equivalent to 1'419'244 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 0s, orders 999900, executions 491811
+Finished: time 10s, orders 15108489, executions 7431109
+
+order_execution_mixed   time:   [6.7742 ms 7.0406 ms 7.3967 ms]
+```
+
+#### 100'000 orders and 10'000 traders, with Margin Accounts
+
+During warm-up we placed 9'999'499 limit orders on the book, and we've got 5'005'111 executions within 9s.
+
+In this test we achieve time 123.76ms per one 100'000 order batch, which is equivalent to 808'015 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 9s, orders 9999499, executions 5005111
+Finished: time 24s, orders 23098844, executions 11561792
+
+order_execution_mixed   time:   [121.58 ms 123.76 ms 126.14 ms]
+```
+
+#### 100'000 orders and 1'000 traders, with Margin Accounts
+
+During warm-up we placed 9'995'798 limit orders on the book, and we've got 4'984'809 executions within 19s.
+
+In this test we achieve time 459.07ms per one 100'000 order batch, which is equivalent to 211'304 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 19s, orders 9995798, executions 4984809
+Finished: time 71s, orders 21490968, executions 10717329
+
+order_execution_mixed   time:   [459.07 ms 473.25 ms 487.07 ms]
+```
+
+#### 100'000 orders and 100 traders, with Margin Accounts
+
+During warm-up we placed 9'953'399 limit orders on the book, and we've got 4'981'018 executions within 107s.
+
+In this test we achieve time 3.2504s per one 100'000 order batch, which is equivalent to 30'769 orders per second.
+
+```output
+Warm-up: time 0s, orders 0, executions 0
+Ready: time 107s, orders 9953399, executions 4981018
+Finished: time 439s, orders 20205401, executions 10111448
+
+order_execution_mixed   time:   [3.1103 s 3.2504 s 3.3888 s]
+```
+
