@@ -8,5 +8,15 @@ name = "order_execution"
 path = "examples/order_execution.rs"
 
 [dependencies]
+criterion = "0.5.1"
 intrusive-collections = "0.9.7"
 itertools = "0.14.0"
+rand = "0.9.1"
+
+[dev-dependencies]
+criterion = "0.5.1"
+rand = "0.9.1"
+
+[[bench]]
+name = "order_execution"
+harness = false

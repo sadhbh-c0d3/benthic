@@ -49,6 +49,11 @@ impl MarginLot {
         }
     }
 
+    /// Tell how much quantity was executed in the last transaction
+    pub fn get_last_transaction_quantity(&self) -> Option<u64> {
+        self.transactions.iter().last().map(|x| x.executed_quantity)
+    }
+
     /// Close some quantity, and remember the transaction
     pub fn close_quantity(&mut self, quantity: u64, order: Rc<Order>, price: u64) -> Option<u64> {
         if quantity < self.quantity_left {
@@ -216,6 +221,7 @@ pub trait MarginLotEventHandler {
         lot: &MarginLot,
         order: Rc<Order>,
         price: u64,
+        account_id: usize,
     );
     fn handle_lot_opened(
         &self,
@@ -224,6 +230,7 @@ pub trait MarginLotEventHandler {
         lot: &MarginLot,
         order: Rc<Order>,
         price: u64,
+        account_id: usize,
     );
 }
 
@@ -272,7 +279,8 @@ impl MarginAssetAccount {
         quantity: u64,
         order: Rc<Order>,
         price: u64,
-        event_handler: &impl MarginLotEventHandler,
+        account_id: usize,
+        event_handler: &Rc<dyn MarginLotEventHandler>,
     ) {
         let order_2 = order.clone();
         if let Some(quantity) =
@@ -284,6 +292,7 @@ impl MarginAssetAccount {
                         lot,
                         order.clone(),
                         price,
+                        account_id,
                     )
                 })
         {
@@ -295,6 +304,7 @@ impl MarginAssetAccount {
                         lot,
                         order_2,
                         price,
+                        account_id,
                     )
                 });
         }
@@ -308,7 +318,8 @@ impl MarginAssetAccount {
         quantity: u64,
         order: Rc<Order>,
         price: u64,
-        event_handler: &impl MarginLotEventHandler,
+        account_id: usize,
+        event_handler: &Rc<dyn MarginLotEventHandler>,
     ) {
         let order_2 = order.clone();
         if let Some(quantity) =
@@ -320,6 +331,7 @@ impl MarginAssetAccount {
                         lot,
                         order.clone(),
                         price,
+                        account_id,
                     )
                 })
         {
@@ -331,6 +343,7 @@ impl MarginAssetAccount {
                         lot,
                         order_2,
                         price,
+                        account_id,
                     )
                 });
         }
@@ -343,13 +356,15 @@ impl MarginAssetAccount {
 pub struct MarginTradingAccount {
     pub account_id: usize,
     pub portfolio: HashMap<String, Rc<RefCell<MarginAssetAccount>>>,
+    margin_lot_event_handler: Rc<dyn MarginLotEventHandler>,
 }
 
 impl MarginTradingAccount {
-    pub fn new(account_id: usize) -> Self {
+    pub fn new(account_id: usize, margin_lot_event_handler: Rc<dyn MarginLotEventHandler>) -> Self {
         Self {
             account_id,
             portfolio: HashMap::new(),
+            margin_lot_event_handler,
         }
     }
 
@@ -376,7 +391,13 @@ impl MarginTradingAccount {
                         .get_quantity_and_value(quantity, price)
                         .ok_or("Mathematical overflow")?;
                     asset_account_mut.begin_receipt(base_quantity);
-                    asset_account_mut.commit_receipt(base_quantity, order, price, self);
+                    asset_account_mut.commit_receipt(
+                        base_quantity,
+                        order,
+                        price,
+                        self.account_id,
+                        &self.margin_lot_event_handler,
+                    );
                     Ok(())
                 }
                 OrderType::Withdraw(quantity) => {
@@ -385,7 +406,13 @@ impl MarginTradingAccount {
                         .get_quantity_and_value(quantity, price)
                         .ok_or("Mathematical overflow")?;
                     asset_account_mut.begin_delivery(base_quantity);
-                    asset_account_mut.commit_delivery(base_quantity, order, price, self);
+                    asset_account_mut.commit_delivery(
+                        base_quantity,
+                        order,
+                        price,
+                        self.account_id,
+                        &self.margin_lot_event_handler,
+                    );
                     Ok(())
                 }
                 _ => Err("Invalid transfer type".into()),
@@ -609,13 +636,15 @@ impl MarginTradingAccount {
                             base_quantity,
                             order_quantity.order.clone(),
                             limit.price,
-                            self,
+                            self.account_id,
+                            &self.margin_lot_event_handler,
                         );
                         quote_asset_account.commit_receipt(
                             quote_value,
                             order_quantity.order.clone(),
                             limit.price,
-                            self,
+                            self.account_id,
+                            &self.margin_lot_event_handler,
                         );
                     }
                     Side::Bid => {
@@ -623,13 +652,15 @@ impl MarginTradingAccount {
                             base_quantity,
                             order_quantity.order.clone(),
                             limit.price,
-                            self,
+                            self.account_id,
+                            &self.margin_lot_event_handler,
                         );
                         quote_asset_account.commit_delivery(
                             quote_value,
                             order_quantity.order.clone(),
                             limit.price,
-                            self,
+                            self.account_id,
+                            &self.margin_lot_event_handler,
                         );
                     }
                 };
@@ -662,66 +693,42 @@ impl MarginTradingAccount {
     }
 }
 
-impl MarginLotEventHandler for MarginTradingAccount {
+pub struct MarginLotEventHandlerNull;
+
+impl MarginLotEventHandler for MarginLotEventHandlerNull {
     fn handle_lot_closed(
         &self,
-        asset: Rc<Asset>,
-        side: Side,
-        lot: &MarginLot,
-        order: Rc<Order>,
-        price: u64,
+        _asset: Rc<Asset>,
+        _side: Side,
+        _lot: &MarginLot,
+        _order: Rc<Order>,
+        _price: u64,
+        _account_id: usize,
     ) {
-        println!(
-            "Margin   <-- Lot({}:{}): close {:28}    <- (Order({}:{}): {} at {})",
-            self.account_id,
-            asset.symbol,
-            format!(
-                "{:6} {:10} ({})",
-                lot_side(side),
-                price_fmt(lot.quantity_left, asset.decimals),
-                price_fmt(lot.quantity_orig, asset.decimals)
-            ),
-            order.participant_id,
-            order.order_id,
-            order,
-            quote_price_fmt(price, &order.market)
-        )
     }
-
     fn handle_lot_opened(
         &self,
-        asset: Rc<Asset>,
-        side: Side,
-        lot: &MarginLot,
-        order: Rc<Order>,
-        price: u64,
+        _asset: Rc<Asset>,
+        _side: Side,
+        _lot: &MarginLot,
+        _order: Rc<Order>,
+        _price: u64,
+        _account_id: usize,
     ) {
-        println!(
-            "Margin   <-- Lot({}:{}):  open {:28}    <- (Order({}:{}): {} at {})",
-            self.account_id,
-            asset.symbol,
-            format!(
-                "{:6} {:10}",
-                lot_side(side),
-                price_fmt(lot.quantity_orig, asset.decimals)
-            ),
-            order.participant_id,
-            order.order_id,
-            order,
-            quote_price_fmt(price, &order.market)
-        )
     }
 }
 
 /// Manager of all Margin accounts
 pub struct MarginManager {
     margins: HashMap<usize, Rc<RefCell<MarginTradingAccount>>>,
+    margin_lot_event_handler: Rc<dyn MarginLotEventHandler>,
 }
 
 impl MarginManager {
-    pub fn new() -> Self {
+    pub fn new(margin_lot_event_handler: Rc<dyn MarginLotEventHandler>) -> Self {
         Self {
             margins: HashMap::new(),
+            margin_lot_event_handler,
         }
     }
 
@@ -730,6 +737,7 @@ impl MarginManager {
             .entry(participant_id)
             .or_insert(Rc::new(RefCell::new(MarginTradingAccount::new(
                 participant_id,
+                self.margin_lot_event_handler.clone(),
             ))))
     }
 
@@ -780,96 +788,95 @@ impl ExecutionPolicy for MarginManager {
         aggressor_order: &mut OrderQuantity,
         book_order: &mut OrderQuantity,
     ) -> Result<(), Box<dyn Error>> {
-        if *executed_quantity > 0 {
-            let result = if let Some(aggressor_margin) =
-                self.margins.get(&aggressor_order.order.participant_id)
-            {
-                let mut aggressor_margin_mut = aggressor_margin.borrow_mut();
-                if let Ok(()) = aggressor_margin_mut.execute_order_begin(
-                    executed_quantity,
-                    aggressor_order,
-                    &book_order,
-                    true,
-                ) {
-                    if let Some(book_margin) = self.margins.get(&book_order.order.participant_id) {
-                        let mut book_margin_mut = book_margin.borrow_mut();
-                        if let Ok(()) = book_margin_mut.execute_order_begin(
-                            executed_quantity,
-                            book_order,
+        if *executed_quantity == 0 {
+            return Err("Not enough quantity".into());
+        }
+        if aggressor_order.order.participant_id == book_order.order.participant_id {
+            return Err("Self-trade not possible".into());
+        }
+
+        let result = if let Some(aggressor_margin) =
+            self.margins.get(&aggressor_order.order.participant_id)
+        {
+            let mut aggressor_margin_mut = aggressor_margin.borrow_mut();
+            if let Ok(()) = aggressor_margin_mut.execute_order_begin(
+                executed_quantity,
+                aggressor_order,
+                &book_order,
+                true,
+            ) {
+                if let Some(book_margin) = self.margins.get(&book_order.order.participant_id) {
+                    let mut book_margin_mut = book_margin.borrow_mut();
+                    if let Ok(()) = book_margin_mut.execute_order_begin(
+                        executed_quantity,
+                        book_order,
+                        &book_order,
+                        false,
+                    ) {
+                        if let Ok(()) = aggressor_margin_mut.execute_order_commit(
+                            *executed_quantity,
+                            &aggressor_order,
                             &book_order,
-                            false,
+                            true,
                         ) {
-                            if let Ok(()) = aggressor_margin_mut.execute_order_commit(
+                            if let Ok(()) = book_margin_mut.execute_order_commit(
                                 *executed_quantity,
-                                &aggressor_order,
                                 &book_order,
-                                true,
+                                &book_order,
+                                false,
                             ) {
-                                if let Ok(()) = book_margin_mut.execute_order_commit(
-                                    *executed_quantity,
-                                    &book_order,
-                                    &book_order,
-                                    false,
-                                ) {
-                                    Ok(())
-                                } else {
-                                    if let Err(err) = aggressor_margin_mut.execute_order_rollback(
-                                        *executed_quantity,
-                                        &aggressor_order,
-                                    ) {
-                                        Err(err)
-                                    } else {
-                                        Err(format!(
-                                            "Margin failed commit execution for {}",
-                                            book_order.order.participant_id
-                                        )
-                                        .into())
-                                    }
-                                }
+                                Ok(())
                             } else {
-                                Err(format!(
-                                    "Margin failed commit execute for {}",
-                                    book_order.order.participant_id
-                                )
-                                .into())
+                                if let Err(err) = aggressor_margin_mut
+                                    .execute_order_rollback(*executed_quantity, &aggressor_order)
+                                {
+                                    Err(err)
+                                } else {
+                                    Err(format!(
+                                        "Margin failed commit execution for {}",
+                                        book_order.order.participant_id
+                                    )
+                                    .into())
+                                }
                             }
                         } else {
                             Err(format!(
-                                "Margin failed begin execute for {}",
+                                "Margin failed commit execute for {}",
                                 book_order.order.participant_id
                             )
                             .into())
                         }
                     } else {
-                        Err(
-                            format!("Margin not found for {}", book_order.order.participant_id)
-                                .into(),
+                        Err(format!(
+                            "Margin failed begin execute for {}",
+                            book_order.order.participant_id
                         )
+                        .into())
                     }
                 } else {
-                    Err(format!(
-                        "Margin failed begin execute for {}",
-                        aggressor_order.order.participant_id
-                    )
-                    .into())
+                    Err(format!("Margin not found for {}", book_order.order.participant_id).into())
                 }
             } else {
                 Err(format!(
-                    "Margin not found for {}",
+                    "Margin failed begin execute for {}",
                     aggressor_order.order.participant_id
                 )
                 .into())
-            };
-
-            if let Err(err) = result {
-                Err(err)
-            } else {
-                aggressor_order.quantity -= *executed_quantity;
-                book_order.quantity += *executed_quantity;
-                Ok(())
             }
         } else {
-            Err("Not enough quantity".into())
+            Err(format!(
+                "Margin not found for {}",
+                aggressor_order.order.participant_id
+            )
+            .into())
+        };
+
+        if let Err(err) = result {
+            Err(err)
+        } else {
+            aggressor_order.quantity -= *executed_quantity;
+            book_order.quantity += *executed_quantity;
+            Ok(())
         }
     }
 }

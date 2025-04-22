@@ -49,11 +49,11 @@ impl PriceLevel {
         mut book_order: OrderQuantity,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
-    ) {
-        if let Ok(()) = execution_policy.place_order(&mut book_order) {
-            market_data_policy.handle_order_placed(&book_order);
-            self.orders.borrow_mut().push_back(book_order);
-        }
+    ) -> Result<(), Box<dyn Error>> {
+        execution_policy.place_order(&mut book_order)?;
+        market_data_policy.handle_order_placed(&book_order);
+        self.orders.borrow_mut().push_back(book_order);
+        Ok(())
     }
 
     pub fn match_order(
@@ -61,26 +61,24 @@ impl PriceLevel {
         aggressor_order: &mut OrderQuantity,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let mut orders = self.orders.borrow_mut();
         while let Some(book_order) = orders.front_mut() {
             if aggressor_order.quantity == 0 {
                 break;
             }
             let mut executed_quantity = min(aggressor_order.quantity, book_order.quantity);
-            if let Ok(_) =
-                execution_policy.execute_orders(&mut executed_quantity, aggressor_order, book_order)
-            {
-                market_data_policy.handle_order_executed(
-                    executed_quantity,
-                    aggressor_order,
-                    book_order,
-                );
-            }
+            execution_policy.execute_orders(&mut executed_quantity, aggressor_order, book_order)?;
+            market_data_policy.handle_order_executed(
+                executed_quantity,
+                aggressor_order,
+                book_order,
+            );
             if book_order.quantity == 0 {
                 orders.pop_front();
             }
         }
+        Ok(())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -115,7 +113,9 @@ struct MarketMatchOps {
 
 impl MarketMatchOps {
     fn new(order_side: Side) -> Self {
-        Self { book_side: order_side.opposite() }
+        Self {
+            book_side: order_side.opposite(),
+        }
     }
 }
 
@@ -149,7 +149,10 @@ struct LimitMatchOps {
 
 impl LimitMatchOps {
     fn new(order_side: Side, limit_price: u64) -> Self {
-        Self { book_side: order_side.opposite(), limit_price }
+        Self {
+            book_side: order_side.opposite(),
+            limit_price,
+        }
     }
 }
 
@@ -187,7 +190,7 @@ impl PriceLevels {
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
         ops: &impl PriceLevelMatchOps,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let mut cursor = ops.begin_ops(&mut self.levels);
 
         while let Some(level) = cursor.get() {
@@ -195,12 +198,13 @@ impl PriceLevels {
                 break;
             }
 
-            level.match_order(order_quantity, execution_policy, market_data_policy);
+            level.match_order(order_quantity, execution_policy, market_data_policy)?;
             if level.is_empty() {
                 cursor.remove();
             }
             ops.move_next(&mut cursor);
         }
+        Ok(())
     }
 
     pub fn match_market_order(
@@ -209,13 +213,13 @@ impl PriceLevels {
         market_order: &MarketOrder,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         self.match_order_side(
             order_quantity,
             execution_policy,
             market_data_policy,
             &MarketMatchOps::new(market_order.side),
-        );
+        )
     }
 
     pub fn match_limit_order(
@@ -224,13 +228,13 @@ impl PriceLevels {
         limit: &LimitOrder,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         self.match_order_side(
             order_quantity,
             execution_policy,
             market_data_policy,
             &LimitMatchOps::new(limit.side, limit.price),
-        );
+        )
     }
 
     pub fn place_limit_order(
@@ -239,26 +243,26 @@ impl PriceLevels {
         limit: &LimitOrder,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let mut cursor = self.levels.lower_bound_mut(Bound::Included(&limit.price));
 
         if let Some(level) = cursor.get() {
             if limit.price == level.price {
                 // Level already exists: Add order to that level
-                level.place_order(order_quantity, execution_policy, market_data_policy);
+                level.place_order(order_quantity, execution_policy, market_data_policy)
             } else {
                 // There exists level before, which we should insert new level
-                if let Ok(()) = execution_policy.place_order(&mut order_quantity) {
-                    market_data_policy.handle_order_placed(&order_quantity);
-                    cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
-                }
+                execution_policy.place_order(&mut order_quantity)?;
+                market_data_policy.handle_order_placed(&order_quantity);
+                cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
+                Ok(())
             }
         } else {
             // We should insert at the end
-            if let Ok(()) = execution_policy.place_order(&mut order_quantity) {
-                market_data_policy.handle_order_placed(&order_quantity);
-                cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
-            }
+            execution_policy.place_order(&mut order_quantity)?;
+            market_data_policy.handle_order_placed(&order_quantity);
+            cursor.insert_before(Rc::new(PriceLevel::new(order_quantity, limit)));
+            Ok(())
         }
     }
 
@@ -298,7 +302,7 @@ impl OrderBook {
                             &limit,
                             execution_policy,
                             market_data_policy,
-                        );
+                        )?;
                         self.bid.place_limit_order(
                             order_quantity,
                             &limit,
@@ -312,7 +316,7 @@ impl OrderBook {
                             &limit,
                             execution_policy,
                             market_data_policy,
-                        );
+                        )?;
                         self.ask.place_limit_order(
                             order_quantity,
                             &limit,
@@ -321,7 +325,6 @@ impl OrderBook {
                         )
                     }
                 }
-                Ok(())
             }
             OrderType::ImmediateOrCancel(limit) => {
                 let mut order_quantity = OrderQuantity::new_limit_order(order.clone(), limit);
@@ -332,18 +335,17 @@ impl OrderBook {
                             &limit,
                             execution_policy,
                             market_data_policy,
-                        );
-                    }
+                        )
+                    },
                     Side::Ask => {
                         self.bid.match_limit_order(
                             &mut order_quantity,
                             &limit,
                             execution_policy,
                             market_data_policy,
-                        );
+                        )
                     }
                 }
-                Ok(())
             }
             OrderType::Market(market_order) => {
                 let mut order_quantity =
@@ -355,7 +357,7 @@ impl OrderBook {
                             &market_order,
                             execution_policy,
                             market_data_policy,
-                        );
+                        )
                     }
                     Side::Ask => {
                         self.bid.match_market_order(
@@ -363,10 +365,9 @@ impl OrderBook {
                             &market_order,
                             execution_policy,
                             market_data_policy,
-                        );
+                        )
                     }
                 }
-                Ok(())
             }
             _ => Err("Invalid order type".into()),
         }
