@@ -207,7 +207,7 @@ We have performed number of tests with varying number of orders and traders.
 
 #### 100'000 orders and 10'000 traders, only Order Book
 
-During warm-up we placed 10'000'000 limit orders on the book, and we've got 5'005'111 executions within 27s.
+During warm-up we placed 10'000'000 limit orders on the book, and we've got 5'005'111 executions within <1s.
 
 In this test we achieve time 20.822ms per one 100'000 order batch, which is equivalent to 4'802'612 orders per second.
 
