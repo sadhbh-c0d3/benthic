@@ -13,6 +13,10 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
+const NUM_TRADERS: usize = 1_000;
+const NUM_ORDERS: usize = 500_000;
+const BENCHMARK_VERSION: &str = "Static Lots Handler (VecDeque)";
+
 struct BenchExecutions<T>
 where
     T: ExecutionPolicy,
@@ -117,12 +121,9 @@ fn benchmark_order_placement(c: &mut Criterion) {
 
     let mut order_manager = OrderManager::new(order_books);
 
-    let mut margin_manager = MarginManager::new(Rc::new(MarginLotEventHandlerNull));
+    let mut margin_manager = MarginManager::new(MarginLotEventHandlerNull);
 
     let mut rng = SmallRng::seed_from_u64(123456999);
-
-    const NUM_TRADERS: usize = 10_000;
-    const NUM_ORDERS: usize = 10_000;
 
     (0..NUM_TRADERS).for_each(|n| {
         margin_manager
@@ -178,6 +179,7 @@ fn benchmark_order_placement(c: &mut Criterion) {
         }
     };
 
+    println!("Config: NUM_TRADERS = {NUM_TRADERS}, NUM_ORDERS = {NUM_ORDERS}, BENCHMARK_VERSION = {BENCHMARK_VERSION}");
 
     println!(
         "Warm-up: time {}s, orders {}, executions {}",

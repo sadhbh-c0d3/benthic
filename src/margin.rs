@@ -188,13 +188,12 @@ impl MarginSide {
         quantity: u64,
         order: Rc<Order>,
         price: u64,
-        mut cb: impl FnMut(&MarginLot),
+        cb: impl FnOnce(&MarginLot),
     ) -> Option<u64> {
-        let (has_partial_match, pos, left) = self.match_lots_tell(quantity, order, price);
+        let (has_partial_match, _pos, left) = self.match_lots_tell(quantity, order, price);
         if has_partial_match {
             self.open_lots.front().inspect(|lot| cb(lot));
         }
-        self.closed_lots.iter().rev().skip(pos).rev().for_each(cb);
         left
     }
 
@@ -202,6 +201,12 @@ impl MarginSide {
     pub fn match_lots(&mut self, quantity: u64, order: Rc<Order>, price: u64) -> Option<u64> {
         let (_, _, left) = self.match_lots_tell(quantity, order, price);
         left
+    }
+
+    /// Flush closed lots, so that they don't take up memory
+    pub fn flush_closed_lots(&mut self, cb: impl FnMut(MarginLot)) {
+        self.closed_lots.drain(..).for_each(cb);
+        self.closed_lots.clear();
     }
 }
 
@@ -214,7 +219,7 @@ pub struct MarginAssetAccount {
 
 /// Handles open and close lot events
 pub trait MarginLotEventHandler {
-    fn handle_lot_closed(
+    fn handle_lot_opened(
         &self,
         asset: Rc<Asset>,
         side: Side,
@@ -223,11 +228,20 @@ pub trait MarginLotEventHandler {
         price: u64,
         account_id: usize,
     );
-    fn handle_lot_opened(
+    fn handle_lot_updated(
         &self,
         asset: Rc<Asset>,
         side: Side,
         lot: &MarginLot,
+        order: Rc<Order>,
+        price: u64,
+        account_id: usize,
+    );
+    fn handle_lot_closed(
+        &self,
+        asset: Rc<Asset>,
+        side: Side,
+        lot: MarginLot,
         order: Rc<Order>,
         price: u64,
         account_id: usize,
@@ -280,13 +294,13 @@ impl MarginAssetAccount {
         order: Rc<Order>,
         price: u64,
         account_id: usize,
-        event_handler: &Rc<dyn MarginLotEventHandler>,
+        event_handler: &impl MarginLotEventHandler,
     ) {
         let order_2 = order.clone();
         if let Some(quantity) =
             self.delivered
                 .match_lots_with_callback(quantity, order.clone(), price, |lot| {
-                    event_handler.handle_lot_closed(
+                    event_handler.handle_lot_updated(
                         self.asset.clone(),
                         Side::Ask,
                         lot,
@@ -297,7 +311,7 @@ impl MarginAssetAccount {
                 })
         {
             self.received
-                .create_lot_with_callback(quantity, order, price, |lot| {
+                .create_lot_with_callback(quantity, order_2.clone(), price, |lot| {
                     event_handler.handle_lot_opened(
                         self.asset.clone(),
                         Side::Bid,
@@ -310,6 +324,17 @@ impl MarginAssetAccount {
         }
         self.received
             .commit_transaction(quantity, self.delivered.will_commit_opposite_side(quantity));
+
+        self.delivered.flush_closed_lots(|lot| {
+            event_handler.handle_lot_closed(
+                self.asset.clone(),
+                Side::Ask,
+                lot,
+                order.clone(),
+                price,
+                account_id,
+            )
+        });
     }
 
     /// Commit delivery of a lot of an asset (will match existing lots on Long side)
@@ -319,13 +344,13 @@ impl MarginAssetAccount {
         order: Rc<Order>,
         price: u64,
         account_id: usize,
-        event_handler: &Rc<dyn MarginLotEventHandler>,
+        event_handler: &impl MarginLotEventHandler,
     ) {
         let order_2 = order.clone();
         if let Some(quantity) =
             self.received
                 .match_lots_with_callback(quantity, order.clone(), price, |lot| {
-                    event_handler.handle_lot_closed(
+                    event_handler.handle_lot_updated(
                         self.asset.clone(),
                         Side::Bid,
                         lot,
@@ -336,7 +361,7 @@ impl MarginAssetAccount {
                 })
         {
             self.delivered
-                .create_lot_with_callback(quantity, order, price, |lot| {
+                .create_lot_with_callback(quantity, order_2.clone(), price, |lot| {
                     event_handler.handle_lot_opened(
                         self.asset.clone(),
                         Side::Ask,
@@ -349,18 +374,35 @@ impl MarginAssetAccount {
         }
         self.delivered
             .commit_transaction(quantity, self.received.will_commit_opposite_side(quantity));
+
+        self.received.flush_closed_lots(|lot| {
+            event_handler.handle_lot_closed(
+                self.asset.clone(),
+                Side::Bid,
+                lot,
+                order.clone(),
+                price,
+                account_id,
+            )
+        })
     }
 }
 
 /// Margin account of a single participant
-pub struct MarginTradingAccount {
+pub struct MarginTradingAccount<TLotHandler>
+where 
+    TLotHandler: MarginLotEventHandler
+{
     pub account_id: usize,
     pub portfolio: HashMap<String, Rc<RefCell<MarginAssetAccount>>>,
-    margin_lot_event_handler: Rc<dyn MarginLotEventHandler>,
+    margin_lot_event_handler: TLotHandler,
 }
 
-impl MarginTradingAccount {
-    pub fn new(account_id: usize, margin_lot_event_handler: Rc<dyn MarginLotEventHandler>) -> Self {
+impl<TLotHandler> MarginTradingAccount<TLotHandler>
+where 
+    TLotHandler: MarginLotEventHandler
+{
+    pub fn new(account_id: usize, margin_lot_event_handler: TLotHandler) -> Self {
         Self {
             account_id,
             portfolio: HashMap::new(),
@@ -693,19 +735,10 @@ impl MarginTradingAccount {
     }
 }
 
+#[derive(Clone)]
 pub struct MarginLotEventHandlerNull;
 
 impl MarginLotEventHandler for MarginLotEventHandlerNull {
-    fn handle_lot_closed(
-        &self,
-        _asset: Rc<Asset>,
-        _side: Side,
-        _lot: &MarginLot,
-        _order: Rc<Order>,
-        _price: u64,
-        _account_id: usize,
-    ) {
-    }
     fn handle_lot_opened(
         &self,
         _asset: Rc<Asset>,
@@ -716,23 +749,49 @@ impl MarginLotEventHandler for MarginLotEventHandlerNull {
         _account_id: usize,
     ) {
     }
+    fn handle_lot_updated(
+        &self,
+        _asset: Rc<Asset>,
+        _side: Side,
+        _lot: &MarginLot,
+        _order: Rc<Order>,
+        _price: u64,
+        _account_id: usize,
+    ) {
+    }
+    fn handle_lot_closed(
+        &self,
+        _asset: Rc<Asset>,
+        _side: Side,
+        _lot: MarginLot,
+        _order: Rc<Order>,
+        _price: u64,
+        _account_id: usize,
+    ) {
+    }
 }
 
 /// Manager of all Margin accounts
-pub struct MarginManager {
-    margins: HashMap<usize, Rc<RefCell<MarginTradingAccount>>>,
-    margin_lot_event_handler: Rc<dyn MarginLotEventHandler>,
+pub struct MarginManager<TLotHandler>
+where 
+    TLotHandler: MarginLotEventHandler + Clone
+{
+    margins: HashMap<usize, Rc<RefCell<MarginTradingAccount<TLotHandler>>>>,
+    margin_lot_event_handler: TLotHandler,
 }
 
-impl MarginManager {
-    pub fn new(margin_lot_event_handler: Rc<dyn MarginLotEventHandler>) -> Self {
+impl<TLotHandler> MarginManager<TLotHandler>
+where 
+    TLotHandler: MarginLotEventHandler + Clone
+{
+    pub fn new(margin_lot_event_handler: TLotHandler) -> Self {
         Self {
             margins: HashMap::new(),
             margin_lot_event_handler,
         }
     }
 
-    pub fn add_account(&mut self, participant_id: usize) -> &Rc<RefCell<MarginTradingAccount>> {
+    pub fn add_account(&mut self, participant_id: usize) -> &Rc<RefCell<MarginTradingAccount<TLotHandler>>> {
         self.margins
             .entry(participant_id)
             .or_insert(Rc::new(RefCell::new(MarginTradingAccount::new(
@@ -741,12 +800,15 @@ impl MarginManager {
             ))))
     }
 
-    pub fn get_participants(&self) -> &HashMap<usize, Rc<RefCell<MarginTradingAccount>>> {
+    pub fn get_participants(&self) -> &HashMap<usize, Rc<RefCell<MarginTradingAccount<TLotHandler>>>> {
         &self.margins
     }
 }
 
-impl ExecutionPolicy for MarginManager {
+impl<TLotHandler> ExecutionPolicy for MarginManager<TLotHandler>
+where 
+    TLotHandler: MarginLotEventHandler + Clone
+{
     /// Perform margin checks and accounting for new order placement
     fn place_order(&self, order_quantity: &mut OrderQuantity) -> Result<(), Box<dyn Error>> {
         if order_quantity.quantity > 0 {

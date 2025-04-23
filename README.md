@@ -304,6 +304,30 @@ Finished: time 439s, orders 20205401, executions 10111448
 order_execution_mixed   time:   [3.1103 s 3.2504 s 3.3888 s]
 ```
 
+
+#### 50'000 orders and 1'000 traders, with Margin Accounts, Lots flushing, and static Lots handler
+
+```output
+
+Config: NUM_TRADERS = 1000, NUM_ORDERS = 50000, BENCHMARK_VERSION = Static Lots Handler (VecDeque)
+
+Ready: time 2s, orders 4997898, executions 2493009
+Finished: time 13s, orders 21341031, executions 10645119
+
+order_execution_mixed   time:   [31.949 ms 32.734 ms 33.729 ms]
+```
+
+#### 500'000 orders and 1'000 traders, with Margin Accounts, Lots flushing, and static Lots handler
+
+```output
+Config: NUM_TRADERS = 1000, NUM_ORDERS = 500000, BENCHMARK_VERSION = Static Lots Handler (VecDeque)
+
+Warm-up: time 0s, orders 0, executions 0
+Finished: time 99s, orders 103445557, executions 51673833
+
+order_execution_mixed   time:   [486.97 ms 500.03 ms 517.13 ms]
+```
+
 #### 50'000 orders and 1'000 traders, with Margin Accounts, Lots flushing, and static Lots handler
 ```output
 

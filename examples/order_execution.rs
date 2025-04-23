@@ -65,7 +65,7 @@ fn main() {
     let trader_b = 1002;
 
     let mut order_manager = OrderManager::new(order_books);
-    let mut margin_manager = MarginManager::new(Rc::new(LogMarginLots::new(MarginLotEventHandlerNull)));
+    let mut margin_manager = MarginManager::new(LogMarginLots::new(MarginLotEventHandlerNull));
     println!("Margin  -->  create Account({})", trader_a);
     margin_manager
         .add_account(trader_a)
@@ -181,7 +181,7 @@ fn main() {
         }
     };
 
-    let print_portfolio = |margin_manager: &MarginManager| {
+    let print_portfolio = |margin_manager: &MarginManager<LogMarginLots<MarginLotEventHandlerNull>>| {
         println!("");
         for (account_id, account) in margin_manager
             .get_participants()
