@@ -238,6 +238,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct LogMarginLots<T>
 where
     T: MarginLotEventHandler,
@@ -258,33 +259,6 @@ impl<T> MarginLotEventHandler for LogMarginLots<T>
 where
     T: MarginLotEventHandler,
 {
-    fn handle_lot_closed(
-        &self,
-        asset: Rc<Asset>,
-        side: Side,
-        lot: &MarginLot,
-        order: Rc<Order>,
-        price: u64,
-        account_id: usize,
-    ) {
-        println!(
-            "Margin   <-- Lot({}:{}): close {:28}    <- (Order({}:{}): {} at {})",
-            account_id,
-            asset.symbol,
-            format!(
-                "{:6} {:10} ({})",
-                lot_side(side),
-                price_fmt(lot.get_last_transaction_quantity().unwrap(), asset.decimals),
-                price_fmt(lot.quantity_left, asset.decimals)
-            ),
-            order.participant_id,
-            order.order_id,
-            order,
-            quote_price_fmt(price, &order.market)
-        );
-        self.handler.handle_lot_closed(asset, side, lot, order, price, account_id);
-    }
-
     fn handle_lot_opened(
         &self,
         asset: Rc<Asset>,
@@ -308,6 +282,63 @@ where
             order,
             quote_price_fmt(price, &order.market)
         );
-        self.handler.handle_lot_opened(asset, side, lot, order, price, account_id);
+        self.handler
+            .handle_lot_opened(asset, side, lot, order, price, account_id);
+    }
+
+    fn handle_lot_updated(
+        &self,
+        asset: Rc<Asset>,
+        side: Side,
+        lot: &MarginLot,
+        order: Rc<Order>,
+        price: u64,
+        account_id: usize,
+    ) {
+        println!(
+            "Margin   <-- Lot({}:{}): close {:28}    <- (Order({}:{}): {} at {})",
+            account_id,
+            asset.symbol,
+            format!(
+                "{:6} {:10} ({})",
+                lot_side(side),
+                price_fmt(lot.get_last_transaction_quantity().unwrap(), asset.decimals),
+                price_fmt(lot.quantity_left, asset.decimals)
+            ),
+            order.participant_id,
+            order.order_id,
+            order,
+            quote_price_fmt(price, &order.market)
+        );
+        self.handler
+            .handle_lot_updated(asset, side, lot, order, price, account_id);
+    }
+
+    fn handle_lot_closed(
+        &self,
+        asset: Rc<Asset>,
+        side: Side,
+        lot: MarginLot,
+        order: Rc<Order>,
+        price: u64,
+        account_id: usize,
+    ) {
+        println!(
+            "Margin   <-- Lot({}:{}): close {:28}    <- (Order({}:{}): {} at {})",
+            account_id,
+            asset.symbol,
+            format!(
+                "{:6} {:10} ({})",
+                lot_side(side),
+                price_fmt(lot.get_last_transaction_quantity().unwrap(), asset.decimals),
+                price_fmt(lot.quantity_left, asset.decimals)
+            ),
+            order.participant_id,
+            order.order_id,
+            order,
+            quote_price_fmt(price, &order.market)
+        );
+        self.handler
+            .handle_lot_closed(asset, side, lot, order, price, account_id);
     }
 }
