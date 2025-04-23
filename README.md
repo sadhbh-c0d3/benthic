@@ -304,3 +304,38 @@ Finished: time 439s, orders 20205401, executions 10111448
 order_execution_mixed   time:   [3.1103 s 3.2504 s 3.3888 s]
 ```
 
+#### 50'000 orders and 1'000 traders, with Margin Accounts, Lots flushing, and static Lots handler
+```output
+
+Branch: perf/lots-vecdeque-with-flush
+Config: NUM_TRADERS = 1000, NUM_ORDERS = 50000, BENCHMARK_VERSION = Static Lots Handler (VecDeque)
+
+Ready: time 2s, orders 4997898, executions 2493009
+Finished: time 13s, orders 21341031, executions 10645119
+
+order_execution_mixed   time:   [31.949 ms 32.734 ms 33.729 ms]
+```
+
+#### 500'000 orders and 1'000 traders, with Margin Accounts, Lots flushing, and static Lots handler
+```output
+Branch: perf/lots-vecdeque-with-flush
+Config: NUM_TRADERS = 1000, NUM_ORDERS = 500000, BENCHMARK_VERSION = Static Lots Handler (VecDeque)
+
+Ready: time 49s, orders 49973698, executions 24963209
+Finished: time 103s, orders 103445557, executions 51673833
+
+order_execution_mixed   time:   [486.52 ms 501.11 ms 519.65 ms]
+memory used ~11GB
+```
+
+#### 500'000 orders and 1'000 traders, with Margin Accounts and Lots flush, and static Lots Handler
+```output
+Branch: perf/lots-intrusive-list-with-flush
+Config: NUM_TRADERS = 1'000, NUM_ORDERS = 500'000, BENCHMARK_VERSION = Static Lots Handler (intrusive LinkedList)
+
+Ready: time 63s, orders 49973698, executions 24963209
+Finished: time 137s, orders 103445557, executions 51673833
+
+order_execution_mixed   time:   [684.73 ms 689.97 ms 696.37 ms]
+memory used ~22GB
+```
