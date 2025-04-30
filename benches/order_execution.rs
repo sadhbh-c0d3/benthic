@@ -13,9 +13,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use itertools::Itertools;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 
+const NUM_MARKETS: usize = 1_000;
+const NUM_ASSETS: usize = 1_000;
 const NUM_TRADERS: usize = 1_000;
 const NUM_ORDERS: usize = 500_000;
-const BENCHMARK_VERSION: &str = "Static Lots Handler (VecDeque)";
+const BENCHMARK_VERSION: &str = "Many Markets";
 
 struct BenchExecutions<T>
 where
@@ -69,89 +71,80 @@ where
 }
 
 fn benchmark_order_placement(c: &mut Criterion) {
+    let mut rng = SmallRng::seed_from_u64(123456999);
+
     let asset_usdt = Rc::new(Asset {
         symbol: "USDT".into(),
         decimals: 2,
     });
 
-    let asset_btc = Rc::new(Asset {
-        symbol: "BTC".into(),
-        decimals: 7,
-    });
+    let mut assets = (0..(NUM_ASSETS - 1))
+        .map(|n| {
+            Rc::new(Asset {
+                symbol: format!("A{}", n),
+                decimals: rng.random_range(2..10),
+            })
+        })
+        .collect_vec();
 
-    let asset_eth = Rc::new(Asset {
-        symbol: "ETH".into(),
-        decimals: 6,
-    });
+    assets.push(asset_usdt.clone());
 
-    let market_btc_usdt = Rc::new(Market {
-        symbol: "BTC/USDT".into(),
-        base_asset: asset_btc.clone(),
-        quote_asset: asset_usdt.clone(),
-        tick: 1,
-        multiplier: 1,
-        quote_decimals: 2,
-        base_decimals: 5,
-    });
+    let markets = (0..NUM_MARKETS)
+        .map(|_| {
+            let base_asset = rng.random_range(0..NUM_ASSETS);
+            let mut quote_asset = rng.random_range(0..(NUM_ASSETS-1));
+            if base_asset <= quote_asset {
+                quote_asset += 1;
+            }
+            let base_asset = &assets[base_asset];
+            let quote_asset = &assets[quote_asset];
+            Rc::new(Market {
+                symbol: format!("{}/{}", base_asset.symbol, quote_asset.symbol),
+                base_asset: base_asset.clone(),
+                quote_asset: quote_asset.clone(),
+                tick: 1,
+                multiplier: 1,
+                quote_decimals: quote_asset.decimals,
+                base_decimals: base_asset.decimals,
+            })
+        })
+        .collect_vec();
 
-    let market_eth_usdt = Rc::new(Market {
-        symbol: "ETH/USDT".into(),
-        base_asset: asset_eth.clone(),
-        quote_asset: asset_usdt.clone(),
-        tick: 1,
-        multiplier: 1,
-        quote_decimals: 2,
-        base_decimals: 5,
-    });
-
-    let market_btc_eth = Rc::new(Market {
-        symbol: "BTC/ETH".into(),
-        base_asset: asset_btc.clone(),
-        quote_asset: asset_eth.clone(),
-        tick: 1,
-        multiplier: 1,
-        quote_decimals: 4,
-        base_decimals: 5,
-    });
-
-    let order_books = Rc::new(OrderBooks::new(&[
-        Rc::new(RefCell::new(OrderBook::new(market_btc_usdt.clone()))),
-        Rc::new(RefCell::new(OrderBook::new(market_btc_eth.clone()))),
-    ]));
+    let order_books = Rc::new(OrderBooks::new(
+        markets
+            .iter()
+            .map(|market| Rc::new(RefCell::new(OrderBook::new(market.clone()))))
+            .collect_vec()
+            .as_slice(),
+    ));
 
     let mut order_manager = OrderManager::new(order_books);
 
     let mut margin_manager = MarginManager::new(MarginLotEventHandlerNull);
 
-    let mut rng = SmallRng::seed_from_u64(123456999);
-
     (0..NUM_TRADERS).for_each(|n| {
-        margin_manager
-            .add_account(n)
-            .borrow_mut()
-            .add_asset_account(&asset_btc)
-            .add_asset_account(&asset_eth)
-            .add_asset_account(&asset_usdt)
-            .transfer(
-                Rc::new(Order {
-                    market: if rng.random_bool(0.5) {
-                        market_btc_usdt.clone()
-                    } else {
-                        market_eth_usdt.clone()
-                    },
-                    participant_id: n,
-                    order_id: n,
-                    order_data: OrderType::Deposit(rng.random_range(1_00000..100_00000)),
-                }),
-                rng.random_range(400000..10000000),
-            )
-            .expect("Failed to create account");
+        let mut account = margin_manager.add_account(n).borrow_mut();
+
+        assets.iter().for_each(|asset| {
+            account.add_asset_account(&asset);
+            if rng.random_ratio(1, NUM_ASSETS as u32) {
+                let _ = account.transfer(
+                    Rc::new(Order {
+                        market: markets[rng.random_range(0..NUM_MARKETS)].clone(),
+                        participant_id: n,
+                        order_id: n,
+                        order_data: OrderType::Deposit(rng.random_range(1_00000..100_00000)),
+                    }),
+                    rng.random_range(400000..10000000),
+                );
+            }
+        });
     });
 
     let orders = (0..NUM_ORDERS)
         .map(|n| {
             Rc::new(Order {
-                market: market_btc_eth.clone(),
+                market: markets[rng.random_range(0..NUM_MARKETS)].clone(),
                 order_id: NUM_TRADERS + n,
                 participant_id: rng.random_range(0..NUM_TRADERS),
                 order_data: OrderType::Limit(LimitOrder {
@@ -179,7 +172,7 @@ fn benchmark_order_placement(c: &mut Criterion) {
         }
     };
 
-    println!("Config: NUM_TRADERS = {NUM_TRADERS}, NUM_ORDERS = {NUM_ORDERS}, BENCHMARK_VERSION = {BENCHMARK_VERSION}");
+    println!("Config: NUM_TRADERS = {NUM_TRADERS}, NUM_ORDERS = {NUM_ORDERS}, NUM_ASSETS = {NUM_ASSETS}, NUM_MARKETS = {NUM_MARKETS}, BENCHMARK_VERSION = {BENCHMARK_VERSION}");
 
     println!(
         "Warm-up: time {}s, orders {}, executions {}",
