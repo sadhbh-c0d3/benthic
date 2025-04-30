@@ -3,6 +3,7 @@ use std::{cell::RefCell, cmp::min, collections::VecDeque, error::Error, rc::Rc};
 use intrusive_collections::{
     intrusive_adapter, rbtree::CursorMut, Bound, KeyAdapter, RBTree, RBTreeLink,
 };
+use itertools::Itertools;
 
 use crate::{execution_policy::ExecutionPolicy, market_data_policy::MarketDataPolicy, order::*};
 
@@ -54,6 +55,31 @@ impl PriceLevel {
         market_data_policy.handle_order_placed(&book_order);
         self.orders.borrow_mut().push_back(book_order);
         Ok(())
+    }
+
+    pub fn cancel_order(
+        &self,
+        mut book_order: OrderQuantity,
+        execution_policy: &impl ExecutionPolicy,
+        market_data_policy: &impl MarketDataPolicy,
+    ) -> Result<(), Box<dyn Error>> {
+        execution_policy.cancel_order(&mut book_order)?;
+        market_data_policy.handle_order_cancelled(&book_order);
+        let mut write_orders = self.orders.borrow_mut();
+        let pos = write_orders
+            .iter()
+            .find_position(|order| order.order.order_id == book_order.order.order_id);
+        match pos {
+            Some((pos, order)) => {
+                if order.quantity < book_order.quantity {
+                    write_orders.remove(pos);
+                } else {
+                    write_orders[pos].quantity -= book_order.quantity;
+                }
+                Ok(())
+            }
+            None => Err("Order does not exist at this level".into()),
+        }
     }
 
     pub fn match_order(
@@ -269,6 +295,36 @@ impl PriceLevels {
     // pub fn place_stop(&mut self, order: Rc<Order>, stop: &StopOrder) {
     //     Place trigger at given level, that will place limit if triggered
     // }
+
+    pub fn cancel_limit_order(
+        &mut self,
+        order_quantity: OrderQuantity,
+        limit: &LimitOrder,
+        execution_policy: &impl ExecutionPolicy,
+        market_data_policy: &impl MarketDataPolicy,
+    ) -> Result<(), Box<dyn Error>> {
+        let mut cursor = self.levels.lower_bound_mut(Bound::Included(&limit.price));
+
+        if let Some(level) = cursor.get() {
+            if limit.price == level.price {
+                // Level already exists: Add order to that level
+                match level.cancel_order(order_quantity, execution_policy, market_data_policy) {
+                    Ok(_) => {
+                        if level.is_empty() {
+                            cursor.remove();
+                        };
+                        Ok(())
+                    }
+                    Err(err) => Err(err),
+                }
+            } else {
+                Err("Price level does not exist".into())
+            }
+        } else {
+            // We should insert at the end
+            Err("Price level does not exist".into())
+        }
+    }
 }
 
 pub struct OrderBook {
@@ -329,44 +385,64 @@ impl OrderBook {
             OrderType::ImmediateOrCancel(limit) => {
                 let mut order_quantity = OrderQuantity::new_limit_order(order.clone(), limit);
                 match limit.side {
-                    Side::Bid => {
-                        self.ask.match_limit_order(
-                            &mut order_quantity,
-                            &limit,
-                            execution_policy,
-                            market_data_policy,
-                        )
-                    },
-                    Side::Ask => {
-                        self.bid.match_limit_order(
-                            &mut order_quantity,
-                            &limit,
-                            execution_policy,
-                            market_data_policy,
-                        )
-                    }
+                    Side::Bid => self.ask.match_limit_order(
+                        &mut order_quantity,
+                        &limit,
+                        execution_policy,
+                        market_data_policy,
+                    ),
+                    Side::Ask => self.bid.match_limit_order(
+                        &mut order_quantity,
+                        &limit,
+                        execution_policy,
+                        market_data_policy,
+                    ),
                 }
             }
             OrderType::Market(market_order) => {
                 let mut order_quantity =
                     OrderQuantity::new_market_order(order.clone(), market_order);
                 match market_order.side {
-                    Side::Bid => {
-                        self.ask.match_market_order(
-                            &mut order_quantity,
-                            &market_order,
-                            execution_policy,
-                            market_data_policy,
-                        )
-                    }
-                    Side::Ask => {
-                        self.bid.match_market_order(
-                            &mut order_quantity,
-                            &market_order,
-                            execution_policy,
-                            market_data_policy,
-                        )
-                    }
+                    Side::Bid => self.ask.match_market_order(
+                        &mut order_quantity,
+                        &market_order,
+                        execution_policy,
+                        market_data_policy,
+                    ),
+                    Side::Ask => self.bid.match_market_order(
+                        &mut order_quantity,
+                        &market_order,
+                        execution_policy,
+                        market_data_policy,
+                    ),
+                }
+            }
+            _ => Err("Invalid order type".into()),
+        }
+    }
+
+    pub fn cancel_order(
+        &mut self,
+        order: Rc<Order>,
+        execution_policy: &impl ExecutionPolicy,
+        market_data_policy: &impl MarketDataPolicy,
+    ) -> Result<(), Box<dyn Error>> {
+        match &order.order_data {
+            OrderType::Limit(limit) => {
+                let order_quantity = OrderQuantity::new_limit_order(order.clone(), &limit);
+                match limit.side {
+                    Side::Bid => self.bid.cancel_limit_order(
+                        order_quantity,
+                        &limit,
+                        execution_policy,
+                        market_data_policy,
+                    ),
+                    Side::Ask => self.ask.cancel_limit_order(
+                        order_quantity,
+                        &limit,
+                        execution_policy,
+                        market_data_policy,
+                    ),
                 }
             }
             _ => Err("Invalid order type".into()),

@@ -47,6 +47,7 @@ pub enum OrderType {
     ImmediateOrCancel(LimitOrder),
     Limit(LimitOrder),
     Market(MarketOrder), // TODO: Add OCO and Stop orders
+    Cancel,
 }
 
 pub struct Order {
@@ -206,9 +207,12 @@ impl fmt::Display for Order {
             ),
             OrderType::Deposit(quantity) => {
                 write!(f, "Deposit {}", base_quantity_fmt(*quantity, &self.market))
-            }
+            },
             OrderType::Withdraw(quantity) => {
                 write!(f, "Withdraw {}", base_quantity_fmt(*quantity, &self.market))
+            },
+            OrderType::Cancel => {
+                write!(f, "Cancel")
             }
         }
     }
