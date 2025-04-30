@@ -18,6 +18,10 @@ criterion = "0.5.1"
 rand = "0.9.1"
 chrono = "0.4.40"
 
+#[[bench]]
+#name = "order_execution"
+#harness = false
+
 [[bench]]
-name = "order_execution"
+name = "simple"
 harness = false
