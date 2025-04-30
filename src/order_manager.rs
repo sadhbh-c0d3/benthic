@@ -47,12 +47,34 @@ impl OrderManager {
         }
     }
 
+    pub fn cancel_order(
+        &mut self,
+        order: Rc<Order>,
+        execution_policy: &impl ExecutionPolicy,
+        market_data_policy: &impl MarketDataPolicy,
+    )  -> Result<(), Box<dyn Error>> {
+        let key = (order.participant_id, order.order_id);
+        match self.orders.remove(&key) {
+            Some(order) => {
+                if let Some(book) = self.book_manager.get_order_book(&order.market.symbol) {
+                    book.borrow_mut().cancel_order(order, execution_policy, market_data_policy)
+                } else {
+                    Err(format!("Book not found for symbol: {}", order.market.symbol).into())
+                }
+            },
+            None => Err(format!("Order({}:{}) not found", order.participant_id, order.order_id).into())
+        }
+    }
+
     pub fn place_order(
         &mut self,
         order: Rc<Order>,
         execution_policy: &impl ExecutionPolicy,
         market_data_policy: &impl MarketDataPolicy,
     ) -> Result<(), Box<dyn Error>> {
+        if let OrderType::Cancel = order.order_data {
+            return self.cancel_order(order, execution_policy, market_data_policy)
+        }
         if let Some(book) = self.book_manager.get_order_book(&order.market.symbol) {
             book.borrow_mut()
                 .place_order(order.clone(), execution_policy, market_data_policy)?;
